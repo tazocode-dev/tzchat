@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "487600154062",
+    "project_id": "tazocode-9547a",
+    "storage_bucket": "tazocode-9547a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:487600154062:android:8c0b6a13b2b4f6d0e5f79f",
+        "android_client_info": {
+          "package_name": "com.tazocode.tzchat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCbBdRIEizTIT8aiHsOiE7fBwT2g5CU-c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:487600154062:android:ab63e3361cf57557e5f79f",
+        "android_client_info": {
+          "package_name": "com.tazocode.tzrank"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCbBdRIEizTIT8aiHsOiE7fBwT2g5CU-c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:487600154062:android:a2131860997fc16de5f79f",
+        "android_client_info": {
+          "package_name": "com.tazocode.tzweight"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCbBdRIEizTIT8aiHsOiE7fBwT2g5CU-c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
