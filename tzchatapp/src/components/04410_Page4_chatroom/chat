@@ -1,0 +1,709 @@
+<template>
+  <ion-page>
+    <!-- ✅ 상단 고정 헤더 (A안: ion-header + ion-content) -->
+    <ion-header :translucent="true">
+      <ion-toolbar class="chat-toolbar">
+        <div class="chatroom-header" @click="closeEmojiIfOpen">
+          <span class="chat-title" @click="goToPartnerProfile">{{ partnerNickname }} 님과의 대화2</span>
+          <ion-button size="small" fill="clear" @click="goBack" aria-label="뒤로가기">나가기</ion-button>
+        </div>
+      </ion-toolbar>
+    </ion-header>
+
+    <!-- ✅ 본문: 메시지 영역 전담 스크롤 (+ 입력창은 하단 배치) -->
+    <!-- [키보드] ion-content 자체는 100%를 유지하고, 내부 스크롤 영역(.chat-messages)만 패딩/높이 보정 -->
+    <ion-content class="chat-content">
+      <div class="chatroom-container">
+        <!-- 메시지 리스트 (내부 스크롤 전담) -->
+        <div
+          class="chat-messages"
+          ref="chatScroll"
+          @scroll.passive="scheduleMarkAsRead(250)"
+          @click="closeEmojiIfOpen"
+        >
+          <div
+            v-for="item in displayItems"
+            :key="item._id"
+            class="message-row"
+            :class="{ mine: item.type==='message' && isMine(item) }"
+          >
+            <!-- 날짜 구분선 (⬅ 왼쪽 정렬) -->
+            <template v-if="item.type === 'divider'">
+              <div class="date-divider" role="separator" :aria-label="`타임라인 ${item.label}`">
+                <span class="date-chip">{{ item.label }}</span>
+              </div>
+            </template>
+
+            <!-- ░ 내 메시지 (오른쪽 정렬, 그룹 마지막만 시간/안읽음) ░ -->
+            <template v-else-if="isMine(item)">
+              <div class="my-message">
+                <div class="bubble-row mine-row">
+                  <span
+                    v-if="item._meta?.showTime && !isReadByPartner(item)"
+                    class="read-flag"
+                    aria-label="상대가 아직 읽지 않음"
+                  >안읽음</span>
+
+                  <span v-if="item._meta?.showTime" class="time right-time">{{ formatTime(item.createdAt) }}</span>
+
+                  <div class="bubble my-bubble">
+                    <template v-if="item.imageUrl">
+                      <img :src="getImageUrl(item.imageUrl)" class="chat-image" @click="openImage(getImageUrl(item.imageUrl))" />
+                    </template>
+                    <template v-else>
+                      {{ item.content }}
+                    </template>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- ░ 상대 메시지 (아바타/닉네임은 그룹 첫 메시지만, 시간은 마지막만) ░ -->
+            <template v-else>
+              <div class="other-message">
+                <div
+                  v-if="item._meta?.showAvatarName"
+                  class="avatar-col"
+                  @click="goToPartnerProfile"
+                  role="button"
+                  aria-label="상대 프로필 보기"
+                >
+                  <ProfilePhotoViewer
+                    v-if="partnerId"
+                    :userId="partnerId"
+                    :gender="partnerGender"
+                    :size="AVATAR_SIZE"
+                  />
+                  <div v-else class="avatar-fallback">{{ partnerNickname.charAt(0) || '상' }}</div>
+                </div>
+                <div v-else class="avatar-spacer" />
+
+                <div class="content-col">
+                  <div class="name-line" v-if="item._meta?.showAvatarName">
+                    <span class="name" @click="goToPartnerProfile">{{ partnerNickname }}</span>
+                  </div>
+                  <div class="bubble-row">
+                    <div class="bubble other-bubble">
+                      <template v-if="item.imageUrl">
+                        <img :src="getImageUrl(item.imageUrl)" class="chat-image" @click="openImage(getImageUrl(item.imageUrl))" />
+                      </template>
+                      <template v-else>
+                        {{ item.content }}
+                      </template>
+                    </div>
+                    <span v-if="item._meta?.showTime" class="time right-time">{{ formatTime(item.createdAt) }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- 입력창 (하단 배치, 페이지 플로우 안) -->
+        <!-- [키보드] .chat-input-wrapper는 안전영역 + 키보드 높이를 고려한 여백을 적용 -->
+        <div class="chat-input-wrapper">
+          <div v-if="showEmoji" class="emoji-picker-wrapper" @click.stop>
+            <emoji-picker @emoji-click="insertEmoji"></emoji-picker>
+          </div>
+
+          <div class="chat-input" @click.stop>
+            <ion-button size="small" fill="outline" class="icon-btn" @click="triggerFileInput" aria-label="파일 첨부">📎</ion-button>
+            <input type="file" accept="image/*" ref="fileInput" style="display: none" @change="uploadImage" />
+            <ion-button
+              size="small"
+              fill="outline"
+              class="icon-btn"
+              @click="toggleEmoji"
+              aria-label="이모지 선택"
+            >😊</ion-button>
+
+            <!-- [키보드] textarea 자동 높이 & 최대 높이 동적 제한 (CSS 변수 --composer-max 사용) -->
+            <textarea
+              ref="textareaRef"
+              v-model="newMessage"
+              placeholder="메시지를 입력하세요"
+              @keydown="handleKeydown"
+              
+              @input="autoResizeComposer"      
+              rows="1"
+              autocomplete="off"
+              autocorrect="on"
+              spellcheck="true"
+            ></textarea>
+
+            <ion-button
+              size="small"
+              color="primary"
+              aria-label="전송"
+              @mousedown.prevent
+              @touchstart.prevent
+              @click="sendMessage"
+            >전송</ion-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 이미지 확대 팝업 (화면 중앙 고정) -->
+      <transition name="fade">
+        <div
+          v-if="enlargedImage"
+          class="image-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="이미지 보기"
+          tabindex="-1"
+          @click.self="closeImageModal"
+          @keyup.esc="closeImageModal"
+        >
+          <div class="image-wrapper">
+            <button class="close-button" @click="closeImageModal" aria-label="닫기">×</button>
+            <img :src="enlargedImage" class="modal-image" @click.stop />
+          </div>
+        </div>
+      </transition>
+    </ion-content>
+  </ion-page>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted, nextTick, watch, computed } from 'vue'
+import { IonPage, IonHeader, IonToolbar, IonContent, IonButton } from '@ionic/vue'
+import { Keyboard } from '@capacitor/keyboard'   // [키보드] Capacitor Keyboard
+import { useRoute, useRouter } from 'vue-router'
+import axios from '@/lib/api'
+import { connectSocket, getSocket } from '@/lib/socket'
+import ProfilePhotoViewer from '@/components/02010_minipage/mini_profile/ProfilePhotoViewer.vue'
+
+const route = useRoute()
+const router = useRouter()
+
+const roomId = String(route.params.id || '')
+let socket = null
+
+const myId = ref('')
+const partnerId = ref('')
+const partnerNickname = ref('상대방')
+const partnerGender = ref('')
+
+const AVATAR_SIZE = 40
+
+const messages = ref([])
+const newMessage = ref('')
+const chatScroll = ref(null)
+const textareaRef = ref(null)
+const showEmoji = ref(false)
+const fileInput = ref(null)
+const enlargedImage = ref('')
+
+// ===== 유틸 =====
+const pad2 = (n)=> String(n).padStart(2,'0')
+const minuteKey = (d) => { const t=new Date(d); return `${t.getFullYear()}-${pad2(t.getMonth()+1)}-${pad2(t.getDate())} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` }
+const toLocalYMD = (d) => { const t=new Date(d); return `${t.getFullYear()}-${pad2(t.getMonth()+1)}-${pad2(t.getDate())}` }
+const formatKDate = (d) => new Date(d).toLocaleDateString(undefined, { month: 'long', day: 'numeric', weekday: 'long' })
+const formatTime=(iso)=> new Date(iso).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+
+// ===== 포커스 헬퍼 =====
+const focusComposer = async (delay = 0) => {
+  await nextTick()
+  window.setTimeout(() => {
+    const el = textareaRef.value
+    if (el) {
+      el.focus()
+      const len = el.value?.length ?? 0
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(len, len)
+    }
+  }, delay)
+}
+
+// 판별
+const isMine = (msg)=> !!(msg?.sender && (msg.sender._id===myId.value || msg.sender===myId.value))
+const isReadByPartner = (msg)=> partnerId.value && (msg?.readBy||[]).some(id=>String(id)===String(partnerId.value))
+
+// ===== 렌더 배열(날짜 + 그룹 메타) =====
+const displayItems = computed(() => {
+  const out = []
+  let lastYmd = null
+  const list = messages.value
+  const sameMinute = (a,b)=> a && b && (minuteKey(a.createdAt||a._id)===minuteKey(b.createdAt||b._id))
+
+  for (let i=0; i<list.length; i++){
+    const m = list[i]
+    const created = m.createdAt || m._id
+    const ymd = toLocalYMD(created)
+
+    if (ymd !== lastYmd) {
+      out.push({_id:`divider-${ymd}`, type:'divider', label:formatKDate(created)})
+      lastYmd = ymd
+    }
+
+    const prev = list[i-1]
+    const next = list[i+1]
+    const meta = {}
+
+    if (isMine(m)) {
+      const nextMine = next && isMine(next)
+      const groupWithNext = nextMine && sameMinute(m,next)
+      meta.showTime = !groupWithNext
+    } else {
+      const prevOther = prev && !isMine(prev)
+      const nextOther = next && !isMine(next)
+      const groupWithPrev = prevOther && sameMinute(prev,m)
+      const groupWithNext = nextOther && sameMinute(m,next)
+      meta.showAvatarName = !groupWithPrev
+      meta.showTime = !groupWithNext
+    }
+
+    out.push({ ...m, type:'message', _meta: meta })
+  }
+  return out
+})
+
+// 이미지/모달
+const openImage = (url)=>{ enlargedImage.value=url; requestAnimationFrame(()=>document.querySelector('.image-modal')?.focus()) }
+const closeImageModal = ()=>{ enlargedImage.value='' }
+const getImageUrl = (path)=>{
+  if(!path) return ''
+  if(/^https?:\/\//.test(path)) return path
+  const base=window.location.origin.replace(/\/+$/,'')
+  const p=String(path).startsWith('/')?path:`/${path}`
+  return `${base}${p}`
+}
+
+// 데이터 로딩
+const loadMessages = async ()=>{
+  const res = await axios.get(`/api/chatrooms/${roomId}`)
+  messages.value = res.data.messages || []
+  myId.value = res.data.myId
+  const partner = res.data.participants?.find?.(p=>String(p._id)!==String(myId.value))
+  partnerNickname.value = partner?.nickname || '상대방'
+  partnerId.value = partner?._id || ''
+  partnerGender.value = partner?.gender || ''
+  await nextTick(); scrollToBottom(); scheduleMarkAsRead()
+}
+
+// 전송
+const sendMessage = async ()=>{
+  const content=newMessage.value.trim()
+  if(!content) return
+  const res = await axios.post(`/api/chatrooms/${roomId}/message`,{content,type:'text'})
+  newMessage.value=''
+  getSocket()?.emit('chatMessage',{roomId,message:res.data})
+  pushMessageSafe({...res.data,createdAt:res.data.createdAt||new Date().toISOString()})
+  scrollToBottom()
+  showEmoji.value = false
+  await focusComposer(0)
+}
+
+// 업로드
+const MAX_SIZE=10*1024*1024
+const ACCEPTED=['image/png','image/jpeg','image/webp','image/gif']
+const validateImage=(f)=>ACCEPTED.includes(f.type)&&f.size<=MAX_SIZE
+const uploadImage=async(e)=>{
+  const file=e.target.files?.[0]; if(!file) return
+  if(!validateImage(file)){ e.target.value=''; return }
+  const formData=new FormData(); formData.append('image',file)
+  const up=await axios.post(`/api/chatrooms/${roomId}/upload-image`,formData,{headers:{'Content-Type':'multipart/form-data'},withCredentials:true})
+  const relativePath=up.data?.relativePath||up.data?.imageUrl
+  const msg=await axios.post(`/api/chatrooms/${roomId}/message`,{content:relativePath,type:'image'},{withCredentials:true})
+  getSocket()?.emit('chatMessage',{roomId,message:msg.data})
+  pushMessageSafe({...msg.data,createdAt:msg.data.createdAt||new Date().toISOString()})
+  scrollToBottom(); e.target.value=''
+  showEmoji.value = false
+  await focusComposer(0)
+}
+
+// 붙여넣기
+const onPaste=async(e)=>{
+  const items=e.clipboardData?.items||[]
+  for(const it of items){
+    if(it.kind==='file'){
+      const f=it.getAsFile()
+      if(f && validateImage(f)){
+        const form=new FormData(); form.append('image',f)
+        const up=await axios.post(`/api/chatrooms/${roomId}/upload-image`,form,{headers:{'Content-Type':'multipart/form-data'},withCredentials:true})
+        const relativePath=up.data?.relativePath||up.data?.imageUrl
+        const msg=await axios.post(`/api/chatrooms/${roomId}/message`,{content:relativePath,type:'image'},{withCredentials:true})
+        getSocket()?.emit('chatMessage',{roomId,message:msg.data})
+        pushMessageSafe({...msg.data,createdAt:msg.data.createdAt||new Date().toISOString()})
+        scrollToBottom(); e.preventDefault()
+        showEmoji.value = false
+        await focusComposer(0)
+        break
+      }
+    }
+  }
+}
+
+// 채팅 화면 클릭 시 이모지 접기
+const closeEmojiIfOpen = async ()=>{
+  if(showEmoji.value){
+    showEmoji.value=false
+    await focusComposer(0)
+  }
+}
+
+const handleKeydown=(e)=>{
+  if(e.key==='Enter' && !e.shiftKey){
+    e.preventDefault()
+    sendMessage()
+  }
+}
+const triggerFileInput=()=>fileInput.value?.click()
+const insertEmoji=(ev)=>{
+  const emoji=ev?.detail?.unicode||''
+  if(emoji){
+    newMessage.value+=emoji
+    requestAnimationFrame(()=>textareaRef.value?.focus())
+    autoResizeComposer() // [키보드] 이모지 입력 시 높이 재계산
+  }
+}
+const scrollToBottom=async()=>{ await nextTick(); const el=chatScroll.value; if(el) el.scrollTop=el.scrollHeight }
+
+// 읽음 처리
+let readTimer=null
+const scheduleMarkAsRead=(delay=200)=>{ if(readTimer) clearTimeout(readTimer); readTimer=setTimeout(markAsReadNow,delay) }
+const markAsReadNow=async()=>{ try{ if(!roomId||!myId.value) return; const r=await axios.put(`/api/chatrooms/${roomId}/read`); const ids=r?.data?.updatedMessageIds||[]; if(!ids.length) return; for(const m of messages.value){ if(ids.includes(m._id)){ const arr=m.readBy||[]; if(!arr.includes(myId.value)) m.readBy=[...arr,myId.value] } } getSocket()?.emit('messagesRead',{roomId,readerId:myId.value,messageIds:ids}) }catch(e){} }
+
+// 중복 방지
+const seenMsgIds=new Set()
+const pushMessageSafe=(m)=>{ const id=m?._id; if(!id||seenMsgIds.has(id)) return; seenMsgIds.add(id); messages.value.push(m); if(seenMsgIds.size>1000){ const fid=messages.value[0]?._id; if(fid) seenMsgIds.delete(fid) } }
+
+// ===== [키보드] 가상 키보드 대응 로직 =====
+// 전역 CSS 변수:
+//   --kb: 키보드 높이(px) 추정치
+//   --composer-max: 입력창 textarea 최대 높이(px)
+//   --vh: 실제 가시 뷰포트 높이(px) (Android/Web 보정용)
+let removeKeyboardListeners = null
+let vv = null                // visualViewport
+let baseVh = 0               // 키보드 닫힌 상태의 기준 뷰포트 높이
+let kbOpen = false
+
+const setCssVar = (name, value) => document.documentElement.style.setProperty(name, value)
+
+// [키보드] textarea 자동 리사이즈 (+ 최대 높이 제한)
+const autoResizeComposer = () => {
+  const el = textareaRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  const line = Math.max(32, Math.min(el.scrollHeight, getComposerMaxPx())) // 최소 32px, 최대 --composer-max
+  el.style.height = line + 'px'
+}
+
+// === 입력창 높이 튜닝 포인트 ===
+// 키보드가 닫혀 있을 때 기본 최대높이(px)
+const COMPOSER_MAX_CLOSED = 120   // ← 원하면 110~160 사이로 조절
+// 키보드가 열려 있을 때, 화면(vh) 대비 최대 비율
+const COMPOSER_MAX_OPEN_RATIO = 0.33  // ← 0.40에서 0.33처럼 줄이면 입력창이 낮아짐
+
+// [키보드] 현재 --composer-max 픽셀값 계산
+const getComposerMaxPx = () => {
+  const vh = Number(getComputedStyle(document.documentElement).getPropertyValue('--vh').replace('px','')) || window.innerHeight
+  return kbOpen ? Math.round(vh * COMPOSER_MAX_OPEN_RATIO) : COMPOSER_MAX_CLOSED
+}
+
+// [키보드] 상태 갱신 (열림/닫힘, 높이 계산, CSS 변수 반영)
+const updateKeyboardState = (kbHeightPx = 0) => {
+  kbOpen = kbHeightPx > 0
+  setCssVar('--kb', kbOpen ? `${kbHeightPx}px` : '0px')
+  setCssVar('--composer-max', `${getComposerMaxPx()}px`)
+  // 메시지가 가려지지 않도록 하단으로 스크롤
+  scrollToBottom()
+  // 입력창 높이 재계산
+  autoResizeComposer()
+}
+
+// [키보드] visualViewport 기반 높이 추정 (웹/안드로이드에서 유용)
+const handleViewportResize = () => {
+  if (!vv) return
+  const current = Math.round(vv.height)
+  setCssVar('--vh', `${current}px`)
+  // === 키보드 높이 보정(고급) ===
+  // 일부 기기에서 visualViewport가 실제보다 작게 잡히면 마지막 줄이 가려질 수 있어
+  // 여유값(slop)을 추가합니다. 0~20px 사이로 조절해 보세요.
+  const SLOP = 12  // ← 리스트를 조금 더 위로 밀어 올림
+  const kbHeight = Math.max(0, Math.round(baseVh - current) + SLOP)
+  updateKeyboardState(kbHeight)
+}
+
+// 라이프사이클
+onMounted(async()=>{
+  socket=connectSocket()
+  window.addEventListener('paste', onPaste)
+  await loadMessages()
+
+  // ===== [키보드] 초기 CSS 변수 초기화 =====
+  setCssVar('--kb','0px')
+  setCssVar('--composer-max','110px')
+  setCssVar('--vh', `${window.innerHeight}px`) // fallback
+
+  // ===== [키보드] visualViewport 리스너 (웹/안드로이드 보정) =====
+  if (window.visualViewport) {
+    vv = window.visualViewport
+    baseVh = Math.round(vv.height)  // 키보드 닫힌 기준값
+    vv.addEventListener('resize', handleViewportResize)
+    vv.addEventListener('scroll', handleViewportResize) // 일부 기기에서 키보드 표시 시 viewport scroll 이벤트가 옴
+  } else {
+    // fallback 기준값
+    baseVh = window.innerHeight
+    window.addEventListener('resize', () => {
+      setCssVar('--vh', `${window.innerHeight}px`)
+      const kbHeight = Math.max(0, baseVh - window.innerHeight)
+      updateKeyboardState(kbHeight)
+    })
+  }
+
+  // ===== [키보드] Capacitor Keyboard 이벤트 =====
+  try {
+    const listeners = []
+    // iOS: keyboardWillShow/WillHide, Android/web: DidShow/DidHide가 더 신뢰될 수 있음
+    listeners.push(await Keyboard.addListener('keyboardWillShow', ({ keyboardHeight }) => {
+      updateKeyboardState(Math.round(keyboardHeight || 0))
+    }))
+    listeners.push(await Keyboard.addListener('keyboardWillHide', () => {
+      updateKeyboardState(0)
+    }))
+    listeners.push(await Keyboard.addListener('keyboardDidShow', ({ keyboardHeight }) => {
+      updateKeyboardState(Math.round(keyboardHeight || 0))
+    }))
+    listeners.push(await Keyboard.addListener('keyboardDidHide', () => {
+      updateKeyboardState(0)
+    }))
+
+    removeKeyboardListeners = () => listeners.forEach(l => l?.remove?.())
+  } catch (e) {
+    // 플러그인 미존재 시 무시
+  }
+
+  socket.emit('joinRoom',roomId)
+  socket.on('chatMessage',(msg)=>{
+    const message=msg?.message||msg
+    const inSameRoom = msg?.roomId===roomId || msg?.chatRoom===roomId || msg?.chatRoom?._id===roomId || message?.chatRoom===roomId || message?.chatRoom?._id===roomId
+    if(!inSameRoom) return
+    if(!message.createdAt) message.createdAt=new Date().toISOString()
+    pushMessageSafe(message); scrollToBottom()
+    if(!isMine(message)) scheduleMarkAsRead(250)
+  })
+  socket.on('messagesRead',({roomId:rid,readerId,messageIds}={})=>{
+    if(String(rid)!==String(roomId)) return
+    if(!readerId || !Array.isArray(messageIds) || !messageIds.length) return
+    for(const m of messages.value){
+      if(!isMine(m)) continue
+      if(!messageIds.includes(m._id)) continue
+      const arr=m.readBy||[]; if(!arr.includes(readerId)) m.readBy=[...arr,readerId]
+    }
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('paste', onPaste)
+  if (vv) {
+    vv.removeEventListener('resize', handleViewportResize)
+    vv.removeEventListener('scroll', handleViewportResize)
+  }
+  removeKeyboardListeners?.()
+  setCssVar('--kb','0px')
+  setCssVar('--composer-max','110px')
+})
+
+watch(messages,()=>{ scrollToBottom(); scheduleMarkAsRead(250) },{deep:true})
+
+// 네비게이션
+const goBack=()=>router.push('/home/4page')
+const goToPartnerProfile=()=>{ if(partnerId.value) router.push(`/home/user/${partnerId.value}`) }
+</script>
+
+<style scoped>
+/* ───────── Layout containers ───────── */
+/* === 상단바를 완전히 위로 붙이기(여백 제거) === */
+/* iOS/웹에서 생기는 safe-area 상단 여백 무시 */
+:host { --ion-safe-area-top: env(safe-area-inset-top, 48px); }
+/* ion-header/ion-toolbar의 상단 패딩을 강제로 0 */
+:deep(ion-header) { padding-top: env(safe-area-inset-top, 38px) !important; }
+:deep(ion-toolbar) { --padding-top: env(safe-area-inset-top, 48px); --min-height: 44px; }
+
+
+
+/* ion-content 자체 상·하 패딩도 0 고정 */
+.chat-content {
+  --padding-top: 0px;
+  --padding-bottom: 0px;
+  background: var(--page-bg, #0b0b0b);
+}
+
+
+.chatroom-container{
+  /* ion-content 내부에서 전체 높이 차지하여 내부 스크롤을 위임 */
+  display:flex; flex-direction:column;
+  height:100%; min-height:100%;
+  width:100%;
+  overflow:hidden;
+
+  --gold-500:#d4af37; --gold-400:#e0be53; --black-900:#0b0b0b;
+  --color-text:#000; --color-muted:#9aa0a6;
+  --page-bg:#0b0b0b; --section-bg:#0b0b0b;
+  --bubble-other:#f1f3f4; --bubble-me:#ffefb3;
+  --radius:10px; --radius-lg:14px;
+  --gap-xxs:4px; --gap-xs:6px; --gap-sm:2px; --gap-md:10px;
+  --fz-base:13px; --fz-time:11px; --fz-title:14px;
+}
+
+/* ───────── Header (fixed via ion-header) ───────── */
+.chat-toolbar{
+  --background: #0b0b0b;
+  --border-color: rgba(255,255,255,.06);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.chatroom-header {
+  /* 이제 sticky 아님: ion-header가 고정 */
+  display:flex; align-items:center; gap:var(--gap-sm);
+  height:44px; padding: var(--gap-md);
+  background:#0b0b0b;
+  box-sizing:border-box;
+}
+.chatroom-header ion-button{
+  --padding-start:6px; --padding-end:6px; --border-radius:8px; --color:var(--gold-500);
+  --background:transparent; --border-color:transparent;
+  min-height:30px; font-size:13px; margin-left:auto;
+}
+.chat-title{ font-weight:800; letter-spacing:.2px; color:var(--gold-500); font-size:var(--fz-title); line-height:2.15; cursor:pointer;  margin-left: 8px; }
+
+/* ───────── Messages (inner scroll) ───────── */
+.chat-messages{
+  flex:1 1 0; min-height:0;
+  overflow:auto; -webkit-overflow-scrolling:touch;
+  padding: var(--gap-md);
+  /* ✅ 기본 8px + 키보드가 있을 때만 추가 공간 */
+  padding-bottom: calc(var(--kb, 0px) + var(--chat-bottom-gap, 0px));
+  background:var(--section-bg);
+  scrollbar-gutter:stable;
+
+  /* [키보드] 모바일 스크롤 점프 방지 */
+  overscroll-behavior: contain;
+  touch-action: manipulation;
+}
+
+.chat-messages::-webkit-scrollbar{ width:6px; height:6px; }
+.chat-messages{
+  
+  /* === 채팅 리스트 바닥 여백 튜닝 포인트 ===
+     --chat-bottom-gap 기본값(8px)을 12~20px로 올리면, 키보드 올라와도 리스트가
+     더 위로 떠서 마지막 메시지가 숨지지 않습니다. */
+  padding-bottom: calc(var(--kb, 0px) + var(--chat-bottom-gap, 6px));
+  
+}
+.message-row{ margin-bottom:var(--gap-xs); }
+
+.other-message,.my-message{ display:flex; gap:var(--gap-xxs); }
+.my-message{ width:100%; justify-content:flex-end; align-items:flex-end; }
+
+.other-message{ justify-content:flex-start; align-items:flex-start; }
+.avatar-col,
+.avatar-spacer{
+  width:var(--avatar-size, 40px); min-width:var(--avatar-size, 40px); height:var(--avatar-size, 40px);
+  margin-right:6px; margin-top:var(--avatar-offset-y, 8px);
+}
+.avatar-col{
+  display:flex; align-items:center; justify-content:center;
+  border-radius:var(--avatar-radius, 50%); overflow:hidden;
+  border:1px solid rgba(255,255,255,0.12); background:rgba(212,175,55,0.10);
+  cursor:pointer;
+}
+.avatar-fallback{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#222; color:#eee; font-weight:800; font-size:12px; }
+.avatar-col :deep(.viewer-host){ width:100%; height:100%; }
+.avatar-col :deep(.avatar){ width:100%!important; height:100%!important; object-fit:cover; border-radius:0!important; box-shadow:none!important; pointer-events:none; }
+.content-col{ display:flex; flex-direction:column; max-width:min(78%,560px); }
+.name-line{ margin:0 0 2px 4px; }
+.name{ font-size:11px; color:#cfcfcf; letter-spacing:.2px; user-select:none; }
+.name:hover{ text-decoration:underline; cursor:pointer; }
+
+.bubble-row{ display:flex; align-items:flex-end; gap:6px; }
+.bubble-row.mine-row{ justify-content:flex-end; }
+.bubble{
+  max-width:100%; padding:6px 10px; border-radius:var(--radius);
+  background-color:#fff; color:var(--color-text);
+  word-break:break-word; white-space:pre-wrap;
+  font-size:var(--fz-base); line-height:1.4;
+  box-shadow:0 1px 0 rgba(0,0,0,0.04); border:1px solid rgba(0,0,0,0.06);
+}
+.other-bubble{ background:var(--bubble-other); }
+.my-bubble{ background:var(--bubble-me); border-color:#f6e6ad; }
+
+.chat-image{ max-width:150px; max-height:150px; border-radius:10px; cursor:pointer; display:block; box-shadow:0 1px 0 rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.06); }
+
+.time{ font-size:var(--fz-time); color:var(--color-muted); white-space:nowrap; user-select:none; }
+.right-time{ align-self:flex-end; margin:0 0 2px 2px; }
+.read-flag{
+  font-size:var(--fz-time); color:#1f1f1f; background:#fff3f3; border:1px solid #ffc9c9;
+  border-radius:999px; padding:2px 6px; margin-left:4px; line-height:1.3; user-select:none;
+}
+
+/* 날짜 구분선 — ⬅ 왼쪽 정렬 */
+.date-divider{
+  display:flex; align-items:center; justify-content:flex-start; gap:60px; margin:10px 0;
+}
+.date-divider::before{ content:""; flex:0 0 36px; } /* 아바타 폭만큼 여백 */
+.date-chip{
+  font-size:12px; color:#e6c766; background:rgba(230,199,102,0.08);
+  border:1px solid rgba(230,199,102,0.35); border-radius:999px; padding:4px 10px; line-height:1.2;
+}
+
+/* ───────── Input area ───────── */
+/* === 하단 입력창을 더 아래로(바닥에 더 붙게) === */
+/* safe-area가 필요 없으면 0~2px로 줄이세요 */
+.chat-input-wrapper{
+  position: relative; z-index: 3;
+  background:var(--page-bg); border-top:1px solid rgba(255,255,255,.06);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px); /* 6px → 2px */
+}
+
+/* (선택) 키보드가 닫혀 있을 때 리스트 바닥 여백도 더 줄이고 싶으면
+   --chat-bottom-gap 기본값을 낮추세요. */
+.chat-messages{
+  padding-bottom: calc(var(--kb, 0px) + var(--chat-bottom-gap, 2px)); /* 16px → 8px */
+}
+.chat-input{
+  display:grid; grid-template-columns:auto auto 1fr auto; align-items:end; gap:var(--gap-sm);
+  padding:var(--gap-sm) var(--gap-md); background:var(--page-bg); box-sizing:border-box;
+}
+.chat-input ion-button.icon-btn{ --padding-start:4px; --padding-end:4px; width:34px; min-width:34px; font-size:16px; --border-color:var(--gold-500); --background:transparent; --background-hover:#1a1a1a; }
+.chat-input ion-button[fill="outline"]{ --border-color:var(--gold-500); --color:#fff; --background:transparent; --background-hover:#1a1a1a; --border-radius:9px; min-height:26px; font-size:13px; border:1px solid var(--gold-500); }
+.chat-input ion-button[color="primary"]{ --background:var(--gold-500); --color:#111; --border-radius:10px; min-height:26px; }
+
+.chat-input textarea{
+  flex:1 1 auto; padding:6px 8px; border:1.5px solid #333; border-radius:9px; margin:0;
+  font-size:var(--fz-base); background:#ffffff; color:#000000; resize:none; line-height:1.4;
+  min-height:32px; /* [키보드] 최소 높이 */
+  max-height: var(--composer-max, 110px); /* [키보드] 동적 최대 높이 */
+  box-shadow:0 0 0 2px rgba(212,175,55,0.08);
+}
+.chat-input textarea::placeholder{ color:#7a7a7a; }
+.chat-input textarea:focus{ outline:none; box-shadow:0 0 0 2px rgba(212,175,55,0.35); border-color:var(--gold-500); }
+
+.emoji-picker-wrapper{
+  position:absolute; left:var(--gap-md);
+  bottom: calc(100% + 8px);
+  z-index:999; background:#111; border:1px solid var(--gold-500);
+  border-radius:var(--radius-lg); overflow:hidden; box-shadow:0 8px 20px rgba(0,0,0,.5);
+}
+
+/* ───────── Modal ───────── */
+.image-modal{
+  position: fixed; inset: 0; z-index: 9999;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(0,0,0,.72);
+}
+.image-wrapper{
+  position: relative; max-width: 92vw; max-height: 82vh;
+  display:flex; align-items:center; justify-content:center;
+}
+.modal-image{
+  max-width: 100%; max-height: 100%; border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.close-button{
+  position:absolute; top:-10px; right:-10px; width:32px; height:32px;
+  border:none; border-radius:50%; background:#000; color:#fff; font-size:20px;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+</style>

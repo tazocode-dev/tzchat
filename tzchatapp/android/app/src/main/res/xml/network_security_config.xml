@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+
+  <!-- APK/AAB의 운영 API/WSS 연결은 HTTPS만 허용한다. -->
+  <base-config cleartextTrafficPermitted="false" />
+
+</network-security-config>

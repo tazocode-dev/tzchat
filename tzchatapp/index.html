@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TZChat</title>
+
+    <!-- SPA는 루트 기준 로드 (Vite base:'/'와 일치) -->
+    <base href="/" />
+
+    <!-- ✅ 다크 모드 힌트: UA에 'dark' 선호 전달(스크롤바/폼 기본톤) -->
+    <meta name="color-scheme" content="dark" />
+
+    <!-- ✅ 모바일/WebView 안전 뷰포트 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+
+    <!-- 전화번호 자동 링크 방지(디자인 깨짐 방지) -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- 상태바/주소창 색상(다크톤) -->
+    <meta name="theme-color" content="#121212" />
+
+    <link rel="icon" type="image/png" href="/favicon.png" />
+
+    <!-- iOS PWA 기본 설정 (다크/투명 상태바 권장) -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TZChat" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- ✅ 웹폰트(폭 차이 방지용) : Inter가 없으면 시스템 폰트로 대체 -->
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- ✅ index.html 자체 캐시 최소화(서버 헤더가 최우선이지만 보조 차단용) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <!-- ✅ 초기 깜빡임 방지: 앱 마운트 이전에도 다크톤 유지 -->
+    <style>
+      /*
+        초기 렌더(아직 Vue/Ionic가 마운트되기 전)에서도
+        배경이 흰색으로 번쩍하지 않도록 다크톤으로 고정.
+        App.vue의 theme-gold 및 theme CSS 로드 후에는 해당 토큰이 덮어씁니다.
+      */
+      html,
+      body {
+        color: #f5f5f5;            /* theme-gold의 텍스트 톤과 일치 */
+        background-color: #121212; /* theme-gold의 배경 톤과 일치 */
+        overscroll-behavior: none;
+        margin: 0;
+        height: 100%;
+        min-height: 100dvh;
+        -webkit-text-size-adjust: 100%;
+      }
+      /* 데스크톱 보조용 스크롤바(다크톤) */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #666 transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #666;
+        border-radius: 4px;
+      }
+    </style>
+
+    <!-- ✅ 빌드/배포 버전 태그(로그 분석/버전 식별용) -->
+    <meta name="app-version" content="index-250810-1" />
+  </head>
+
+  <body>
+    <noscript>이 앱을 사용하려면 JavaScript가 필요합니다.</noscript>
+
+    <div id="app"></div>
+
+    <!-- 개발 모드에서는 /src/main.ts, 빌드 후에는 Vite가 dist/index.html에 해시된 자산을 주입 -->
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

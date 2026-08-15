@@ -1,0 +1,7 @@
+{
+  "name": "tzchatapp",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}

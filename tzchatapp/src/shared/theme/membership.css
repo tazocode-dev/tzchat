@@ -1,0 +1,119 @@
+/* =========================================================
+   Membership Theme (Buy page + PlanCard)
+   - Uses Ionic color variables where possible
+   - Mobile-first, responsive grid
+   ========================================================= */
+
+/* Root helpers */
+:root {
+  --membership-gap: 14px;
+  --membership-radius: 14px;
+  --membership-shadow: 0 6px 16px rgba(0,0,0,.08);
+  --membership-card-bg: var(--ion-color-light, #1e1e1e);
+  --membership-text-muted: var(--ion-color-medium, #8a8a8a);
+  --membership-price-size: 1.1rem;
+  --membership-title-size: 1.05rem;
+}
+
+/* Container spacing */
+.membership-section {
+  margin: 8px 0 20px 0;
+}
+
+.membership-header {
+  text-align: center;
+  margin-bottom: 10px;
+  color: var(--membership-text-muted);
+  font-size: 0.95rem;
+}
+
+/* Grid (used by Buy.vue) */
+.plan-grid,
+.plan-list { /* keep compatibility with previous class name */
+  display: grid;
+  gap: var(--membership-gap);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 480px) {
+  .plan-grid,
+  .plan-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 840px) {
+  .plan-grid,
+  .plan-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Card (PlanCard.vue) */
+.plan-card {
+  border-radius: var(--membership-radius);
+  overflow: hidden;
+  box-shadow: var(--membership-shadow);
+  background: var(--membership-card-bg);
+  border: 1px solid color-mix(in oklab, var(--ion-color-medium) 20%, transparent);
+}
+
+.plan-title {
+  font-size: var(--membership-title-size);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.plan-price {
+  margin-top: 2px;
+  font-size: var(--membership-price-size);
+  font-weight: 700;
+}
+
+.plan-benefit {
+  margin: 6px 0 12px 0;
+  color: var(--membership-text-muted);
+  font-size: 0.95rem;
+  line-height: 1.35rem;
+}
+
+/* Price badges (optional utility) */
+.price-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  background: color-mix(in oklab, var(--ion-color-primary) 12%, transparent);
+  color: var(--ion-color-primary-contrast, #fff);
+}
+
+/* Buttons inside ion-card-content */
+.plan-card ion-button {
+  --border-radius: 12px;
+}
+
+/* Loading / error blocks */
+.membership-center {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.membership-error {
+  color: var(--ion-color-danger, #ff4d4f);
+  font-size: 0.95rem;
+}
+
+/* Small utilities */
+.text-muted {
+  color: var(--membership-text-muted);
+}
+
+.mt-8 { margin-top: 2rem; }
+.mb-4 { margin-bottom: 1rem; }
+
+/* iOS safe area breathing room if needed */
+@supports (padding: max(0px)) {
+  .membership-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 16px);
+  }
+}

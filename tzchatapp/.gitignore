@@ -1,0 +1,41 @@
+# Specifies intentionally untracked files to ignore when using Git
+# http://git-scm.com/docs/gitignore
+
+*~
+*.sw[mnpcod]
+.tmp
+*.tmp
+*.tmp.*
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+UserInterfaceState.xcuserstate
+$RECYCLE.BIN/
+
+*.log
+log.txt
+npm-debug.log*
+
+/.idea
+/.ionic
+/.sass-cache
+/.sourcemaps
+/.versions
+/.vscode/*
+!/.vscode/extensions.json
+/coverage
+/dist
+/node_modules
+/platforms
+/plugins
+/www
+# --- Android signing files (절대 공개 금지) ---
+android/keystore/
+keystore.properties
+
+# 실제 환경파일은 로컬·서버에서만 관리하고 Git에는 포함하지 않는다.
+.env
+.env.*
+!.env.example
+!.env.*.example

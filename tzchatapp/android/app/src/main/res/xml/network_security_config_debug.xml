@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+
+  <!-- 디버그 기본: HTTP 허용 -->
+  <base-config cleartextTrafficPermitted="true" />
+
+  <!-- 에뮬레이터(호스트 PC의 localhost → 10.0.2.2) -->
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">10.0.2.2</domain>
+  </domain-config>
+
+  <!-- 필요 시 실기기 테스트용 내부 IP를 '정확한 호스트'로 추가 (대역/범위 불가) -->
+  <!--
+  <domain-config cleartextTrafficPermitted="true">
+    <domain>192.168.0.12</domain>
+  </domain-config>
+  -->
+
+</network-security-config>

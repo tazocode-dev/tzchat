@@ -1,0 +1,37 @@
+export const LEGAL_ITEMS: LegalItem[] = [
+                                                                                        http://localhost:8081/home/legals/v2
+  { slug: 'terms',                label: '서비스 이용약관',            kind: 'page'   }, http://localhost:8081/home/legals/v2/terms
+  { slug: 'privacy',              label: '개인정보 처리방침',          kind: 'page'   }, http://localhost:8081/home/legals/v2/privacy
+  { slug: 'privacy-change-notice',label: '개인정보 처리방침 변경공지',  kind: 'page'   },http://localhost:8081/home/legals/v2/privacy-change-notice
+  { slug: 'lbs-terms',            label: '위치기반서비스 약관',         kind: 'page'   },http://localhost:8081/home/legals/v2/lbs-terms
+  { slug: 'guidelines',           label: '커뮤니티 가이드라인',         kind: 'page'   },http://localhost:8081/home/legals/v2/guidelines
+  { slug: 'report-block',         label: '신고 및 차단 정책',           kind: 'page'   },http://localhost:8081/home/legals/v2/report-block
+  { slug: 'refund-policy',        label: '환불/구독 해지 정책',         kind: 'page'   },http://localhost:8081/home/legals/v2/refund-policy
+  { slug: 'youth-policy',         label: '청소년 보호정책',             kind: 'page'   },http://localhost:8081/home/legals/v2/youth-policy
+  { slug: 'cookies',              label: '쿠키/추적 기술 안내',         kind: 'page'   },http://localhost:8081/home/legals/v2/cookies
+  { slug: 'data-retention',       label: '데이터 보관·삭제 정책',       kind: 'page'   },http://localhost:8081/home/legals/v2/data-retention
+  { slug: 'privacy-consent',      label: '개인정보 수집·이용 동의',     kind: 'consent', defaultRequired: true  }, http://localhost:8081/home/legals/v2/privacy-consent
+  { slug: 'sharing-consent',      label: '제3자 제공 동의',             kind: 'consent', defaultRequired: true  },http://localhost:8081/home/legals/v2/sharing-consent
+  { slug: 'xborder-consent',      label: '국외 이전 동의',              kind: 'consent', defaultRequired: true  }, http://localhost:8081/home/legals/v2/xborder-consent
+  { slug: 'marketing-consent',    label: '광고성 정보 수신 동의',       kind: 'consent', defaultRequired: false }, //선택   http://localhost:8081/home/legals/v2/marketing-consent
+];
+
+
+
+export const LEGAL_ITEMS: LegalItem[] = [
+                                                                                          http://localhost:8081/legals/v2
+  { slug: 'terms',                label: '서비스 이용약관',            kind: 'page'   },    http://localhost:8081/legals/v2/terms
+  { slug: 'privacy',              label: '개인정보 처리방침',          kind: 'page'   },    http://localhost:8081/legals/v2/privacy
+  { slug: 'privacy-change-notice',label: '개인정보 처리방침 변경공지',  kind: 'page'   },    http://localhost:8081/legals/v2/privacy-change-notice
+  { slug: 'lbs-terms',            label: '위치기반서비스 약관',         kind: 'page'   },   http://localhost:8081/legals/v2/lbs-terms
+  { slug: 'guidelines',           label: '커뮤니티 가이드라인',         kind: 'page'   },   http://localhost:8081/legals/v2/guidelines
+  { slug: 'report-block',         label: '신고 및 차단 정책',           kind: 'page'   },   http://localhost:8081/legals/v2/report-block
+  { slug: 'refund-policy',        label: '환불/구독 해지 정책',         kind: 'page'   },   http://localhost:8081/legals/v2/refund-policy
+  { slug: 'youth-policy',         label: '청소년 보호정책',             kind: 'page'   },   http://localhost:8081/legals/v2/youth-policy
+  { slug: 'cookies',              label: '쿠키/추적 기술 안내',         kind: 'page'   },   http://localhost:8081/legals/v2/cookies
+  { slug: 'data-retention',       label: '데이터 보관·삭제 정책',       kind: 'page'   },   http://localhost:8081/legals/v2/data-retention
+  { slug: 'privacy-consent',      label: '개인정보 수집·이용 동의',     kind: 'consent', defaultRequired: true  },          http://localhost:8081/legals/v2/privacy-consent
+  { slug: 'sharing-consent',      label: '제3자 제공 동의',             kind: 'consent', defaultRequired: true  },        http://localhost:8081/legals/v2/sharing-consent
+  { slug: 'xborder-consent',      label: '국외 이전 동의',              kind: 'consent', defaultRequired: true  },        http://localhost:8081/legals/v2/xborder-consent
+  { slug: 'marketing-consent',    label: '광고성 정보 수신 동의',       kind: 'consent', defaultRequired: false }, //선택   http://localhost:8081/legals/v2/marketing-consent
+];

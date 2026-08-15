@@ -1,0 +1,306 @@
+/*
+ * TZChat visual foundation
+ * 기존 클래스명(theme-gold)은 호환성을 위해 유지하지만, 화면은 밝고 따뜻한
+ * 뉴트럴 팔레트와 절제된 브라스 포인트를 사용한다.
+ */
+.theme-gold {
+  --bg: #f6f3ee;
+  --bg-deep: #eee9e2;
+  --panel: #ffffff;
+  --panel-2: #fcfaf7;
+  --panel-soft: #f1ece5;
+  --panel-border: #ddd5cb;
+
+  --text: #28231f;
+  --text-strong: #17130f;
+  --text-dim: #625b55;
+  --text-faint: #746d67;
+  --muted: #625b55;
+
+  --gold: #8f6124;
+  --gold-strong: #6f4516;
+  --gold-soft: rgba(143, 97, 36, 0.13);
+  --gold-surface: #f8efe1;
+  --on-gold: #ffffff;
+  --accent-sage: #607466;
+  --danger: #ad3542;
+  --danger-soft: #fff0f1;
+  --success: #32704a;
+  --success-soft: #eaf6ee;
+
+  --shadow-xs: 0 1px 2px rgba(43, 35, 28, 0.04);
+  --shadow-sm: 0 8px 24px rgba(43, 35, 28, 0.07);
+  --shadow-md: 0 18px 50px rgba(43, 35, 28, 0.11);
+
+  /* 기존 화면이 사용하던 토큰 이름과의 호환 */
+  --card: var(--panel);
+  --row: var(--panel);
+  --border: var(--panel-border);
+  --divider: var(--panel-border);
+  --ink: var(--text);
+  --ink-weak: var(--text-dim);
+  --text-muted: var(--text-faint);
+  --gold-weak: #a77534;
+  --gold-2: #754b1a;
+
+  --ion-background-color: var(--bg);
+  --ion-text-color: var(--text);
+  --ion-color-primary: var(--gold);
+  --ion-color-primary-rgb: 143, 97, 36;
+  --ion-color-primary-contrast: var(--on-gold);
+  --ion-color-primary-shade: #7e5520;
+  --ion-color-primary-tint: #9a713a;
+  --ion-color-medium: var(--text-dim);
+  --ion-color-warning: #b97821;
+  --ion-color-danger: var(--danger);
+  --ion-item-background: var(--panel);
+  --ion-toolbar-background: rgba(251, 250, 248, 0.94);
+  --ion-tab-bar-background: rgba(255, 255, 255, 0.94);
+
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: light;
+}
+
+.theme-gold ::selection {
+  background: rgba(173, 125, 50, 0.2);
+}
+
+.theme-gold ::-webkit-scrollbar-thumb {
+  background: #cfc7bd;
+  border-radius: 999px;
+}
+
+.theme-gold ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.theme-gold ion-content {
+  --background: var(--bg);
+  color: var(--text);
+}
+
+.theme-gold ion-header,
+.theme-gold ion-toolbar,
+.theme-gold ion-footer {
+  --background: rgba(251, 250, 248, 0.94);
+  --color: var(--text);
+  color: var(--text);
+}
+
+.theme-gold ion-header::after,
+.theme-gold ion-footer::before {
+  display: none;
+}
+
+.theme-gold ion-title,
+.theme-gold ion-label {
+  color: var(--text);
+}
+
+.theme-gold ion-list {
+  background: transparent;
+}
+
+.theme-gold ion-item {
+  --background: var(--panel);
+  --color: var(--text);
+  --border-color: var(--panel-border);
+  --background-hover: var(--panel-soft);
+  --background-activated: #eee8df;
+}
+
+.theme-gold ion-button {
+  --border-radius: var(--btn-radius);
+  font-weight: 800;
+}
+
+.theme-gold button,
+.theme-gold input,
+.theme-gold select,
+.theme-gold textarea {
+  font-family: inherit;
+}
+
+.theme-gold ion-modal,
+.theme-gold ion-alert,
+.theme-gold ion-action-sheet {
+  --background: var(--panel);
+  --color: var(--text);
+}
+
+.theme-gold .card,
+.theme-gold .panel,
+.theme-gold .box,
+.theme-gold .block {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--panel-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.theme-gold .header-row,
+.theme-gold .topbar,
+.theme-gold .toolbar,
+.theme-gold .navbar {
+  background: rgba(251, 250, 248, 0.94) !important;
+  color: var(--text) !important;
+  border-color: var(--panel-border) !important;
+  backdrop-filter: saturate(150%) blur(18px);
+  -webkit-backdrop-filter: saturate(150%) blur(18px);
+}
+
+.theme-gold .muted,
+.theme-gold .mutest,
+.theme-gold .text-muted,
+.theme-gold .desc,
+.theme-gold .help {
+  color: var(--text-dim) !important;
+}
+
+.theme-gold .gold,
+.theme-gold .icon-accent,
+.theme-gold a,
+.theme-gold .link {
+  color: var(--gold) !important;
+}
+
+.theme-gold .info-table,
+.theme-gold table,
+.theme-gold .table {
+  width: 100%;
+  background: transparent !important;
+  color: var(--text) !important;
+  border: 0 !important;
+  border-collapse: collapse;
+}
+
+.theme-gold .info-table td,
+.theme-gold table th,
+.theme-gold table td,
+.theme-gold .table th,
+.theme-gold .table td {
+  color: var(--text) !important;
+  border-bottom-color: var(--panel-border) !important;
+}
+
+.theme-gold input,
+.theme-gold select,
+.theme-gold textarea {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--panel-border) !important;
+  box-shadow: none;
+}
+
+.theme-gold input::placeholder,
+.theme-gold textarea::placeholder {
+  color: var(--text-faint) !important;
+}
+
+.theme-gold input:focus,
+.theme-gold select:focus,
+.theme-gold textarea:focus {
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 3px var(--gold-soft) !important;
+}
+
+.theme-gold .btn-primary,
+.theme-gold .button.primary {
+  background: var(--gold) !important;
+  color: var(--on-gold) !important;
+  border: 1px solid var(--gold) !important;
+}
+
+.theme-gold .btn-outline,
+.theme-gold .button.outline,
+.theme-gold .btn-ghost {
+  background: transparent !important;
+  color: var(--gold-strong) !important;
+  border: 1px solid #d8c5a5 !important;
+}
+
+.theme-gold .btn-muted,
+.theme-gold .button.muted,
+.theme-gold .btn-secondary,
+.theme-gold .button.secondary {
+  background: var(--panel-soft) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--panel-border) !important;
+}
+
+.theme-gold .btn-warning,
+.theme-gold .button.warning {
+  background: #fff5e7 !important;
+  color: #8c5717 !important;
+  border: 1px solid #ead2ad !important;
+}
+
+.theme-gold .btn-danger,
+.theme-gold .button.danger {
+  background: var(--danger) !important;
+  color: #fff !important;
+  border: 1px solid var(--danger) !important;
+}
+
+.theme-gold .badge,
+.theme-gold .pill {
+  background: var(--gold) !important;
+  color: var(--on-gold) !important;
+  border: 0 !important;
+}
+
+.theme-gold .row-clickable,
+.theme-gold .item-hover {
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.theme-gold .row-clickable:hover,
+.theme-gold .item-hover:hover {
+  background: var(--panel-soft) !important;
+}
+
+.theme-gold :focus-visible {
+  outline: none !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+/* 밝은 테마 전환 전의 페이지별 dark-scope를 안전하게 상쇄한다. */
+.theme-gold.app-root .dark-scope,
+.theme-gold.app-root .friends-page,
+.theme-gold.app-root .profile-page,
+.theme-gold.app-root .page,
+.theme-gold.app-root .content,
+.theme-gold.app-root .section {
+  background: transparent !important;
+  color: var(--text) !important;
+  --ion-background-color: var(--bg) !important;
+}
+
+.theme-gold.app-root .popup-content {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border-color: var(--panel-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+
+@media (hover: hover) {
+  .theme-gold button:not(:disabled),
+  .theme-gold ion-button:not(.button-disabled) {
+    transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .theme-gold button:not(:disabled):hover,
+  .theme-gold ion-button:not(.button-disabled):hover {
+    filter: brightness(0.98);
+  }
+}
+
+@media (max-width: 360px) {
+  .theme-gold .compact-px {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}

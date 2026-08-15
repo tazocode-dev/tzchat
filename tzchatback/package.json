@@ -1,0 +1,45 @@
+{
+  "name": "tzchatback",
+  "version": "1.0.0",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "NODE_ENV=development nodemon src/server.js",
+    "build": "NODE_ENV=production node scripts/buildCheck.js",
+    "start": "NODE_ENV=production node src/server.js",
+    "pm2:start": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:reload": "pm2 reload ecosystem.config.cjs --env production --update-env",
+    "test": "node --test tests/*.test.js",
+    "test:cors": "node --test tests/corsOrigins.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "bcrypt": "^6.0.0",
+    "connect-mongo": "^5.1.0",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.19",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-session": "^1.18.1",
+    "firebase-admin": "^12.7.0",
+    "module-alias": "^2.2.3",
+    "mongoose": "^8.16.3",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
+    "sharp": "^0.34.3",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  },
+  "_moduleAliases": {
+    "@": "./src"
+  }
+}
