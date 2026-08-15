@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TZChat 쿠키·SDK·추적기술 안내</title>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<main>
+  <span class="draft">게시 전 검토본 · 시행일 미확정</span>
+  <h1>쿠키·SDK·추적기술 안내</h1>
+  <p>TZChat 웹과 앱은 로그인 유지, 알림과 품질 분석을 위해 쿠키, 브라우저 저장소, 서비스워커 및 모바일 SDK를 사용할 수 있습니다.</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>기술</th><th>주요 정보</th><th>목적</th><th>선택권</th></tr></thead>
+    <tbody>
+      <tr><td>로그인 세션 쿠키</td><td>임의 세션 식별자</td><td>로그인 유지, 보안, 요청 식별</td><td>필수. 차단하면 로그인 서비스 이용이 어려움</td></tr>
+      <tr><td>브라우저 로컬 저장소</td><td>알림 설정, 웹 푸시 토큰, UI·앱 상태</td><td>설정 유지와 푸시 등록·해제</td><td>브라우저 데이터 삭제 또는 알림 해제</td></tr>
+      <tr><td>Firebase Cloud Messaging</td><td>Firebase 설치 식별자, FCM 토큰, 기기·앱 정보, 알림 데이터</td><td>친구 신청·채팅 등 푸시 전송</td><td>선택. 서비스 설정과 기기 권한에서 해제</td></tr>
+      <tr><td>Firebase Analytics(Android)</td><td>앱 인스턴스 식별자, 기기·앱 속성, 실행·화면·이벤트, IP 기반 국가 정보 등</td><td>이용 현황, 오류 추세 및 품질 분석</td><td>선택 수집으로 운영하고 동의 전 비활성화 필요</td></tr>
+      <tr><td>서비스워커·캐시</td><td>푸시 스크립트와 정적 파일</td><td>웹 푸시와 앱 로딩 성능</td><td>브라우저 사이트 데이터에서 삭제 가능</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>광고 SDK</h2>
+  <p>현재 운영 서비스는 유료 기능과 광고를 제공하지 않습니다. 프로젝트에 AdMob 테스트 설정과 관련 의존성이 남아 있더라도 운영 광고를 시작하기 전 광고 식별자, 맞춤형 광고, 제3자 제공·국외 이전과 플랫폼 동의 요건을 다시 고지하고 필요한 동의를 받아야 합니다.</p>
+
+  <h2>거부 방법</h2>
+  <ul>
+    <li>웹: 브라우저의 쿠키·사이트 데이터·알림 권한 설정에서 삭제 또는 차단</li>
+    <li>Android/iOS: 운영체제의 TZChat 알림·추적 권한 및 앱 저장공간 설정에서 변경</li>
+    <li>서비스: 프로필 또는 설정의 알림 기능을 끄고 선택적 분석 동의를 철회</li>
+  </ul>
+  <p>필수 세션 기술을 차단하면 로그인과 일부 기능이 정상 동작하지 않을 수 있습니다. 선택적 분석·광고 추적의 거부를 기본 서비스 이용 제한 사유로 삼지 않습니다.</p>
+
+  <footer><a href="index.html">문서 목록</a> · <a href="privacy-policy.html">개인정보 처리방침</a></footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TZChat 연락처 처리 동의</title>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+<main>
+  <span class="draft">게시 전 검토본 · 시행일 미확정</span>
+  <h1>기기 연락처 처리 동의</h1>
+  <p class="muted">연락처 기반 지인 제외 기능을 켤 때만 적용되는 선택 동의</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>항목</th><th>내용</th></tr></thead>
+    <tbody>
+      <tr><th>접근 정보</th><td>기기 주소록에 저장된 전화번호. 이름, 이메일, 주소, 메모는 읽거나 전송하지 않습니다.</td></tr>
+      <tr><th>서버 전송 정보</th><td>전화번호를 국제번호 형식으로 정규화한 뒤 기기에서 SHA-256 처리한 해시값</td></tr>
+      <tr><th>목적</th><td>내 연락처에 있는 회원과 서로 추천·검색 결과에 노출되지 않도록 제외</td></tr>
+      <tr><th>보유기간</th><td>기능을 끄거나 회원 탈퇴가 최종 처리될 때까지</td></tr>
+      <tr><th>처리 방법</th><td>회원이 기능을 직접 켠 경우에만 기기 권한을 확인하고 해시 목록을 서버로 전송</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="notice">SHA-256 해시값은 원문 전화번호를 직접 저장하는 것보다 위험을 줄이지만, 전화번호의 가능한 조합을 대입해 추정할 수 있으므로 완전한 익명정보가 아닙니다.</div>
+
+  <h2>거부·철회 방법</h2>
+  <p>동의하지 않아도 기본 가입, 매칭, 친구, 채팅 기능을 이용할 수 있습니다. 앱의 연락처 기반 지인 제외 기능을 끄면 서버의 연락처 해시 삭제를 요청하며, 운영체제 설정에서도 연락처 권한을 철회할 수 있습니다.</p>
+
+  <div class="choice"><strong>[선택]</strong> 위와 같이 기기 연락처 전화번호를 처리하는 데 동의합니다.</div>
+  <footer><a href="index.html">문서 목록</a> · 문의: <a href="mailto:tazocode@gmail.com">tazocode@gmail.com</a></footer>
+</main>
+</body>
+</html>
