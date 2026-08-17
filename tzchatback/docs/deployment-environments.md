@@ -2,28 +2,31 @@
 
 ## 환경 파일 역할
 
-백엔드는 `NODE_ENV`가 먼저 결정된 뒤 다음 파일만 읽습니다.
+백엔드는 `NODE_ENV`가 먼저 결정된 뒤 해당 환경 파일 하나만 읽습니다.
 
-- 개발: 서버 전용 공통 비밀 설정 `.env`를 먼저 읽고 `.env.development`를 적용합니다.
-- 운영: 같은 `.env`를 먼저 읽고 `.env.production`을 운영 전용 재정의 파일로 적용합니다. 같은 키는 환경별 파일이 우선합니다.
-- 자동화 테스트: 실제 실행 설정과 분리된 `.env.test`가 있을 때만 읽으며 `MAIL_PROVIDER=dev`는 이 환경에서만 허용합니다.
-- 셸과 PM2에 직접 지정한 환경변수는 파일보다 우선합니다.
+- 개발: `.env.development`
+- 운영: `.env.production`
+- 자동화 테스트 런타임: `.env.test`
+- 공통 `.env`는 사용하지 않습니다. 선택된 환경 파일이 없으면 다른 파일로 대체하지 않고 기동을 중단합니다.
+- 셸과 PM2에 직접 지정한 환경변수는 선택된 파일보다 우선합니다.
+
+`.env.development`와 `.env.production`은 각각 DB, JWT·세션, Origin, TZMail·TZPhone, 계정 정책, 푸시 설정을 포함하는 완결된 파일입니다. 한 환경의 값을 다른 환경 파일에 의존시키지 않습니다.
 
 서버에 수동 복사할 파일:
 
-- `tzchatback/.env`: 운영 DB, JWT·세션, TZMail·TZPhone 등 기본·비밀 설정
-- `tzchatback/.env.production`: 현재 서버에서 사용하는 운영 Origin, provider와 운영 재정의 설정. 비밀값이 들어 있으면 이 파일도 비밀 파일로 취급합니다.
+- `tzchatback/.env.production`: 운영 백엔드 설정 전체. 비밀 파일로 취급합니다.
 - `tzchatapp/.env.production`: Vite 빌드에 포함되는 공개 설정만 허용
 
 서버에 복사하지 않을 파일:
 
 - `tzchatback/.env.development`
+- `tzchatback/.env.test`
 - `tzchatapp/.env.development`
 - 모든 `*.example` 파일은 작성 기준일 뿐 실제 실행 파일로 복사하지 않습니다.
 
 `VITE_` 변수는 앱 번들에 포함되므로 API 키나 비밀번호를 넣지 않습니다. 실제 비밀 환경 파일은 Git에 커밋하지 않습니다.
 
-TZMail 등록 앱 ID는 `com.tazocode.com`입니다. API 키는 공통 `.env`에만 저장하고 문서나 프론트 환경 파일에 넣지 않습니다. 테스트 계정 로그인 고정 인증번호는 백엔드 정책에서만 관리하고 프론트 번들에 포함하지 않습니다. 운영 백엔드는 TZPhone의 base URL·앱 ID·API 키가 아직 없으므로, 세 값을 발급·설정하기 전에는 배포 검사가 의도적으로 실패합니다.
+TZMail·TZPhone API 키와 테스트 계정 로그인 고정 인증번호는 해당 백엔드 환경 파일에서만 관리하고 문서나 프론트 환경 파일에 넣지 않습니다. 운영 필수 설정이 비어 있으면 배포 검사가 의도적으로 실패합니다.
 
 ## 개발 실행
 
@@ -36,6 +39,22 @@ npm run dev
 ```
 
 개발 웹은 `http://localhost:11017`, 개발 API는 `http://localhost:11018`만 사용합니다. 일반 이메일은 `MAIL_PROVIDER=tzmail`, `TZMAIL_BASE_URL=https://tzmail.tazocode.com/api`, `EMAIL_CODE_FIXED=false`로 실제 TZMail 발송을 사용합니다. 문자도 `SMS_PROVIDER=tzphone`, `TZPHONE_BASE_URL=https://tzphone.tazocode.com/api`로 실제 TZPhone 발송을 사용하며 mock은 자동화 테스트에서만 허용합니다.
+
+## 약관 동의 메타데이터 초기화
+
+공개 법적 본문은 GitHub Pages에서만 제공하고, DB에는 현재 가입 동의 판정에 필요한 고정 버전 메타데이터와 사용자 동의 기록만 저장합니다. 서버 시작 시 자동 실행하지 않으며 운영자가 대상 환경을 명시해 실행합니다.
+
+```bash
+# 로컬 개발 DB
+cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatback
+NODE_ENV=development npm run seed:terms
+
+# 운영 DB
+cd /home/tazofarm/project/tzchat/tzchatback
+NODE_ENV=production npm run seed:terms
+```
+
+명령은 선택한 `.env.<NODE_ENV>`의 `MONGO_URI`를 사용하며 URI를 출력하지 않습니다. 같은 `slug`와 고정 버전을 upsert하고 해당 slug의 다른 활성 버전만 비활성화하므로 같은 환경에서 반복 실행해도 문서가 중복 생성되거나 버전이 매번 바뀌어 불필요한 재동의가 발생하지 않습니다. 실행 전 `NODE_ENV`와 대상 환경 파일이 올바른 DB를 가리키는지 확인해야 합니다.
 
 ## 운영 배포 전 검사
 
@@ -66,7 +85,16 @@ npm run build
 
 PM2는 반드시 ecosystem 파일로 실행합니다. `pm2 start src/server.js` 또는 `pm2 start npm -- start`처럼 직접 실행하면 운영 검증에서 거부됩니다.
 
-최초 실행:
+공통 `.env`와 ecosystem 중복 설정을 사용하던 기존 PM2 프로세스에는 과거 환경값이 남을 수 있습니다. 이 구조를 처음 반영할 때는 한 번만 기존 프로세스를 삭제하고 ecosystem으로 다시 생성합니다.
+
+```bash
+pm2 delete tzchatback
+cd /home/tazofarm/project/tzchat/tzchatback
+npm run pm2:start
+pm2 save
+```
+
+신규 서버 최초 실행:
 
 ```bash
 cd /home/tazofarm/project/tzchat/tzchatback
@@ -82,10 +110,7 @@ npm run build
 npm run pm2:reload
 ```
 
-서버 수동 환경값:
-
-- `.env`: `TZMAIL_API_KEY` 등 비밀값
-- `.env.production` 또는 PM2 ecosystem: `MAIL_PROVIDER=tzmail`, `EMAIL_CODE_FIXED=false`, `TZMAIL_BASE_URL=http://127.0.0.1:10024/api`, `TZMAIL_APP_ID=com.tazocode.com`
+PM2 ecosystem에는 `NODE_ENV`와 ecosystem 실행 표식만 둡니다. 애플리케이션 설정은 모두 `.env.production`에서 관리합니다.
 
 환경 오류로 기동 직후 종료되면 PM2는 짧은 재시작을 최대 5회로 제한합니다.
 

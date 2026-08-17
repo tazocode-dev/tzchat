@@ -90,7 +90,7 @@ function safeNotificationFor(payload = {}) {
     case 'friend_request_result':
       return { title: '매칭 신청 결과', body: '보낸 매칭 신청 상태가 변경되었습니다.' };
     default:
-      return { title: 'TZChat 알림', body: '새 알림이 있습니다.' };
+      return { title: '손끝 알림', body: '새 알림이 있습니다.' };
   }
 }
 

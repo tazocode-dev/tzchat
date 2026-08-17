@@ -441,7 +441,7 @@ function getReporterNickname() {
 }
 function reportUser(targetId: string) {
   const email = 'tazocode@gmail.com'
-  const subject = '(TZChat 사용자 신고)'
+  const subject = '(손끝 사용자 신고)'
   const reporterId = getReporterId()
   const reporterNickname = getReporterNickname()
   const targetUserId = String(user.value._id || targetId || route.params.id || '')

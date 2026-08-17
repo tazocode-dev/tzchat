@@ -2,7 +2,7 @@
 
 이 문서는 과거 작업을 누적하는 이력서가 아니라, 현재 시점에 유효한 프로젝트 상태를 보여주는 문서다.확인되지 않은 항목은 추측해서 채우지 말고 확인 필요로 유지한다.
 
-마지막 실제 상태 확인일: 2026-08-15
+마지막 실제 상태 확인일: 2026-08-17
 
 1. 프로젝트 기본 정보
 
@@ -98,7 +98,7 @@ Pinia
 
 Node test runner, Vitest 구성
 
-백엔드 Node test runner 106개와 프론트엔드 Vitest 41개 통과. 프론트엔드는 별도 test npm 스크립트 없이 Vitest를 직접 실행
+백엔드 Node test runner 131개와 프론트엔드 Vitest 77개 통과. 프론트엔드는 별도 test npm 스크립트 없이 Vitest를 직접 실행
 
 4. 실행 환경
 
@@ -157,6 +157,8 @@ Capacitor 앱의 운영 API 연결: 운영 HTTPS 도메인 사용. `https://loca
 HTTP/HTTPS 혼합 콘텐츠 문제: 운영 번들과 Android 설정에서 로컬·사설 API 및 cleartext 연결 차단 확인
 
 프론트 환경변수: `VITE_API_BASE_URL`, `VITE_APP_VERSION`, `VITE_HTTP_DEBUG`, `VITE_NOTIFICATION_DEBUG`만 사용하도록 정리
+
+환경 파일: 프론트·백엔드 모두 로컬은 각자의 `.env.development`, 서버 실행과 production 빌드는 각자의 `.env.production` 하나가 완결 설정이며 공통 `.env`는 사용하지 않음. 실제 환경 파일은 Git에 커밋하지 않고 서버에는 `tzchatapp/.env.production`과 `tzchatback/.env.production`을 수동 반영
 
 5. 실행 및 검증 명령
 
@@ -265,7 +267,7 @@ Ubuntu 기반 N100 홈서버 / 실제 배포 여부 확인 필요
 
 프로세스 관리
 
-PM2 ecosystem 설정 추가, 실제 서버 반영 확인 필요
+PM2 ecosystem은 production 실행 표식만 제공하고 환경값은 백엔드 `.env.production`에서 로드하도록 반영, 실제 서버 프로세스 재생성 확인 필요
 
 Nginx
 
@@ -307,9 +309,9 @@ SMS 인증
 
 완료
 
-`NODE_ENV` 선결정 후 개발·운영은 공통 서버 비밀 `.env` 다음 환경별 파일을 읽고, 자동화 테스트는 별도 `.env.test`만 읽는 환경 분리 및 외부 환경변수 우선순위 적용
+백엔드는 `NODE_ENV`에 해당하는 `.env.{environment}` 하나만 필수로 읽고 shell·PM2 외부값을 파일보다 우선하도록 적용. 로컬은 `.env.development`, 서버는 `.env.production`, 자동화 테스트는 `.env.test`로 분리하며 공통 `.env`는 사용하지 않음
 
-앱·백엔드의 실제 `.env*`와 서버 서비스 계정 JSON은 Git에서 제외하고, 값이 없는 `.env.example`·`.env.*.example`만 추적하도록 적용
+프론트·백엔드의 실제 `.env*`와 서버 서비스 계정 JSON은 Git에서 제외하고 환경별 `.env.development.example`, `.env.production.example`만 유지. 환경이 모호한 `.env.example`은 제거
 
 개발·운영 CORS exact allowlist, 로컬·운영 TZMail provider와 전역 고정 이메일 번호 차단, 테스트 전용 dev provider 분리 검증 적용
 
@@ -351,6 +353,20 @@ Capacitor Push Notifications 기반 Android/iOS 권한·수신·클릭 처리를
 
 네이티브 푸시는 알림 설정 ON을 발송 직전에 재확인하고 사용자별 다중 기기 토큰을 유지하며, 로그아웃에서는 인증 소멸 전에 현재 기기 토큰만 해제하고 무효·미등록 토큰만 정리. 잠금화면에는 채팅 본문·닉네임 없이 종류별 고정 문구만 사용하고, iOS 중첩 data 객체·JSON 문자열을 정규화한 뒤 허용 type과 MongoDB ObjectId 기반 대상으로만 라우팅. Android 13+ 권한과 Android 8+ high 채널·전용 아이콘·기본 소리·진동 및 iOS alert/sound/badge 권한·Push entitlement·Background Modes의 Remote notifications를 유지
 
+Android 하드웨어 뒤로가기는 단일 앱 전역 리스너로 처리. 오버레이·키보드를 먼저 닫고 내부 이력이 있으면 한 단계만 이동하며, 이력 없는 상세 진입은 `/home/6page`로 복귀. 기준 홈에서는 2초 안에 두 번 눌러야 앱을 종료하고 로그인·필수 약관·온보딩 흐름은 메인으로 우회하지 않음
+
+사용자 표시명은 Android/iOS/Capacitor 설치명, Android 액티비티, 웹/PWA 제목, 로그인·관리자 로그인·온보딩·앱 헤더와 사용자 문의·신고·메일·푸시에서 `손끝`으로 통일. 법적 공식 서비스명 `TZChat`과 패키지·Firebase·도메인·딥링크 등 기술 식별자는 유지
+
+약관 동의 화면은 서버가 지정한 필수·선택 항목과 버전을 기준으로 하되 공개 법적 문서 매핑의 항목명·요약·필수/선택 배지·자세히 보기를 명확히 표시. 모두 동의는 전체 항목을 선택하고 선택 항목 거부는 제출을 막지 않으며, 상세 문서 확인 전 선택 상태는 현재 사용자 계정에 한정해 임시 보존
+
+가입 동의 메타데이터는 공개 문서 시행일에 맞춘 고정 버전 `2026-08-13-01`로 필수 4개(`terms`, `guidelines`, `youth-policy`, `privacy-consent`)와 선택 2개(`sensitive-information-consent`, `contacts-consent`)를 관리. 로컬 개발 DB에는 6개를 초기화했고 반복 실행 시 중복되지 않음을 확인. 필수 메타데이터 누락은 503으로 완료 처리를 차단하고, 필수 slug를 누락한 배치 동의는 저장 전 400으로 거부하며 미선택 선택 항목은 `optedIn:false`로 기록
+
+연락처 지인 제외 선택 동의는 실제 기능과 연결. `contacts-consent` 현재 활성 버전의 `optedIn:true`가 없으면 서버가 연락처 해시 저장과 지인 제외 ON을 403으로 차단하고, 프론트는 기능을 켤 때 목적·처리 항목·거부 영향을 안내한 뒤 동의를 받음. 단일 철회 또는 배치 미선택 시 저장된 연락처 해시를 삭제하고 지인 제외를 OFF로 변경한 후 동의 기록을 `false`로 저장
+
+민감정보 선택 동의는 구조화 필드 `preference`와 `search_preference`만 대상으로 실제 기능과 연결. `sensitive-information-consent` 현재 활성 버전의 `optedIn:true`가 없으면 서버가 두 필드 저장을 403으로 차단하고, 프론트는 두 성향 편집 진입 시 동의를 받은 후에만 모달을 연다. 단일 철회 또는 배치 미선택 시 두 필드를 빈 값으로 정리한 후 동의 기록을 `false`로 저장하며, 신규 User 기본값도 빈 값으로 유지. `selfintro` 자유문, 일반 성별, 결혼 여부와 기타 프로필·검색 설정은 이 선택 동의 대상이 아님
+
+프로필 사진 신규 업로드는 당분간 최대 2장으로 제한. 프론트는 1·2번 빈 슬롯만 추가를 허용하고 3~8번 빈 슬롯은 잠금 표시하며, 백엔드는 처리 전 개수 검사와 원자적 DB 조건으로 동시 요청도 2장을 넘지 못하게 차단. 기존에 3장 이상 저장된 사진은 임의 삭제하지 않고 계속 표시·관리·삭제할 수 있음
+
 `test@tazocode.com`, `test1@tazocode.com`~`test4@tazocode.com`의 스피드 매칭 상시 시작·만료 후 재시작 예외
 
 master 계정에만 하단 메뉴의 프로필 오른쪽에 관리자 탭을 표시하고, 서버·DB·접속·로그 현황 및 회원 검색·공지·약관·베타 전환 중심으로 `/home/admin` 운영 화면 재구성
@@ -361,11 +377,13 @@ master 전용 하단 테스트 탭과 `/home/admin-test` 순수 시각 샘플 �
 
 현재 무료 서비스와 실제 개인정보 처리 구조를 기준으로 `legal/`에 이용약관·개인정보·선택 기능 동의·안전정책 HTML 초안 14종, 문서 목록과 게시 전 내부 확인표 작성
 
-GitHub Pages의 개인정보 처리방침·이용약관·아동 안전 기준·계정 삭제 안내 4종을 법적 본문의 단일 공개 출처로 정하고 앱 내부 iframe으로 표시. 기존 12개 slug는 공개 문서와 세부 anchor로 연결하며 Terms API는 동의 버전·문서 ID·필수 여부와 사용자 동의 기록 용도로 유지
+GitHub Pages의 개인정보 처리방침·이용약관·아동 안전 기준·계정 삭제 안내 4종을 법적 본문의 단일 공개 출처로 정하고 앱 내부 iframe으로 표시. 4개 canonical URL의 HTTP 200 응답을 확인했으며, 모바일 iframe에는 표 좌우 스크롤 안내와 중첩 iframe 없이 원문을 여는 전체 화면 보기를 제공. 기존 12개 slug는 공개 문서와 세부 anchor로 연결하며 Terms API는 동의 버전·문서 ID·필수 여부와 사용자 동의 기록 용도로 유지. 과거 개인정보·이용약관·아동안전 설정 딥링크는 해당 canonical 내부 라우트로 redirect하고, 미참조 앱 번들 법적 txt와 LegacyHost는 제거
 
-최종 전체 검증에서 백엔드 테스트 106개와 프론트 테스트 41개가 통과했고, 백엔드 build 및 프론트 `build:app`의 Android/iOS 자산 복사·일치 검사까지 통과
+최종 전체 검증에서 백엔드 테스트 131/131과 프론트 테스트 77/77, 백엔드 build, 프론트 production build, `build:app`의 Android/iOS 자산 복사·일치 검사와 Android `assembleDebug`가 모두 통과
 
 진행 중
+
+실제 Android 기기에서 오버레이·키보드·내부 이력·딥링크·홈 2회 입력 종료 동작 확인 필요
 
 실제 브라우저·Android/iOS 기기에서 신규 가입 및 스피드 매칭 전체 흐름 확인 필요
 
@@ -379,7 +397,9 @@ GitHub Pages의 개인정보 처리방침·이용약관·아동 안전 기준·�
 
 TZPhone API 키를 개발·운영 환경에 입력한 뒤 실제 번호 로그인과 설정·로그인 전 전화번호 변경의 전체 흐름 확인 필요
 
-GitHub Pages 목표 경로에 공개 HTML 4종을 업로드하고 실제 웹·Android/iOS iframe 표시 확인 필요. 외부 발송사업자·Firebase 국외 처리 세부정보와 업로드 파일 삭제 범위는 공개 전 확정 필요
+실제 웹·Android/iOS에서 공개 법적 문서 iframe, 모바일 표 좌우 스크롤 안내와 전체 화면 보기, 동의 4필수·2선택 저장 후 온보딩 이동을 확인할 필요가 있음. 외부 발송사업자·Firebase 국외 처리 세부정보와 업로드 파일 삭제 범위는 공개 전 확정 필요
+
+실제 Android/iOS 기기에서 연락처 권한 허용·거부, `contacts-consent` 동의·철회·현재 버전 변경, 해시 업로드·삭제·ON/OFF와 `preference`·`search_preference` 두 성향의 동의·편집·철회 흐름을 통합 확인할 필요가 있음
 
 보류
 
@@ -396,14 +416,6 @@ GitHub Pages 목표 경로에 공개 HTML 4종을 업로드하고 실제 웹·An
 영향
 
 현재 상태
-
-높음
-
-GitHub Pages의 TZChat 법적 문서 4종은 아직 목표 URL에 업로드되지 않음
-
-업로드 전에는 앱 iframe이 404 문서를 표시할 수 있음
-
-공개 전 4개 HTML을 업로드하고 각 canonical URL의 응답과 frame 차단 헤더가 없는지 확인 필요
 
 높음
 
@@ -428,6 +440,14 @@ Android Firebase Analytics가 동의 전 자동 수집될 수 있음. 미사용 
 선택 동의 원칙과 실제 SDK·권한 동작이 불일치할 수 있음
 
 분석 동의 전 수집 비활성화 필요. 좌표 기반 위치 기능을 도입할 때 별도 동의·고지와 런타임 권한 요청을 다시 설계해야 함
+
+중간
+
+앱의 민감정보 상세 링크가 사용하는 외부 GitHub Pages `privacy.html#sensitive` 앵커와 정리된 공개 법적 문서가 별도 `tazocode-legal` 저장소에 아직 반영·배포되지 않음
+
+민감정보 선택 동의 상세 링크가 정확한 본문 위치를 열지 못하고, 앱·저장소의 공개 문구가 다를 수 있음
+
+별도 `tazocode-legal` 저장소에 확정된 선택 동의 범위와 `sensitive` 앵커를 반영·배포한 뒤 웹·Android·iOS의 상세 링크를 확인할 필요가 있음
 
 중간
 
@@ -501,7 +521,9 @@ Vue, Node.js, MongoDB, Nginx, Ionic, Capacitor 중심의 기존 기술 방향을
 
 다른 계정 소유 이메일로 현재 계정 이메일을 변경하는 것은 차단하지만, 해당 기존 계정으로 로그인하는 별도 전환 흐름은 허용한다. 계정 전환 시 서로 다른 계정의 로컬 데이터를 자동 병합하지 않는다.
 
-운영 PM2 프로세스는 `ecosystem.config.cjs`를 통해 실행하며 직접 `pm2 start`로 설정을 우회하지 않는다.
+프론트·백엔드 모두 공통 `.env`를 사용하지 않는다. 로컬은 각 프로젝트의 `.env.development`, 서버 실행과 production 빌드는 각 프로젝트의 `.env.production` 하나를 완결 설정으로 사용하며 실제 환경 파일은 Git에 커밋하지 않는다. 서버 수동 업로드 대상은 `tzchatapp/.env.production`과 `tzchatback/.env.production`이다.
+
+백엔드는 `NODE_ENV`에 해당하는 `.env.{environment}` 하나만 필수로 읽고 shell·PM2 외부값을 우선한다. 운영 PM2 프로세스는 `ecosystem.config.cjs`의 production 실행 표식으로 시작하며 ecosystem에 환경값을 중복 관리하지 않는다.
 
 프론트 production 빌드는 `VITE_API_BASE_URL`을 운영 API Origin과 exact 검증한 뒤 진행하며, 앱 배포 빌드는 Android/iOS 복사 후 웹·네이티브 자산 일치까지 확인한다. 프론트 환경 키는 `VITE_API_BASE_URL`, `VITE_APP_VERSION`, `VITE_HTTP_DEBUG`, `VITE_NOTIFICATION_DEBUG`만 사용한다.
 
@@ -533,7 +555,7 @@ master 계정에는 하단 테스트 탭과 `/home/admin-test` 시각 샘플 대
 
 TZPhone API 키를 개발·운영 환경에 입력하고 실제 문자 수신, 신규·기존 전화 로그인, 설정·로그인 전 번호 변경을 통합 검증한다.
 
-GitHub Pages에 법적 문서 4종을 게시하고 운영 동의 메타데이터의 버전·필수 여부를 공개 문서와 맞춘다.
+별도 `tazocode-legal` 저장소에 정리된 공개 법적 문서와 `privacy.html#sensitive` 앵커를 반영·배포한다. 운영 배포 전 `NODE_ENV=production npm run seed:terms`로 고정 버전 약관 메타데이터 6개를 운영 DB에 초기화하고, 일반 계정·실제 Android/iOS 기기에서 필수 4개·선택 2개 가입 동의, 연락처 권한·동의·철회·ON/OFF, 두 성향 동의·편집·철회 흐름을 통합 검증한다.
 
 운영 백엔드에 저장소 외부 `FCM_SA_PATH`를 수동 반영한 뒤 Android/iOS 실기기 수신·갱신·클릭·OFF·로그아웃을 검증하고, 성공 후 미사용 직접 APNs 코드와 `APNS_*` 환경 설정을 제거한다.
 

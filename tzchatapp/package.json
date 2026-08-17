@@ -5,7 +5,7 @@
   "type": "module",
   "description": "An Ionic project",
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --port 11017",
+    "dev": "vite --host 0.0.0.0 --port 11017 --mode development",
     "build": "node scripts/verifyProductionEnv.mjs && vue-tsc --noEmit -p tsconfig.json && vite build --mode production && node scripts/verifyBuild.mjs",
     "build:app": "npm run build && npx cap copy android && npx cap copy ios && node scripts/verifyNativeCopy.mjs"
   },

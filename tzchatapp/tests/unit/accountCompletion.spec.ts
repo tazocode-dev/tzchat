@@ -1,6 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { hasCompletedProfileOnboarding } from '@/shared/services/accountCompletion'
+import {
+  completionRedirectForApiError,
+  hasCompletedProfileOnboarding,
+} from '@/shared/services/accountCompletion'
 import type { MeUser } from '@/shared/stores/user'
 
 const baseUser = {
@@ -37,5 +40,17 @@ describe('profile onboarding completion', () => {
         hasGender: true,
       },
     }, now)).toBe(false)
+  })
+
+  it('routes both current 403 and compatible 428 completion failures to the required step', () => {
+    expect(completionRedirectForApiError(403, 'AGREEMENTS_REQUIRED', '/home/6page'))
+      .toBe('/legal/consent?return=%2Fhome%2F6page')
+    expect(completionRedirectForApiError(403, 'ONBOARDING_REQUIRED', '/home/3page?tab=received'))
+      .toBe('/onboarding?return=%2Fhome%2F3page%3Ftab%3Dreceived')
+    expect(completionRedirectForApiError(428, 'AGREEMENTS_REQUIRED', '/home/6page'))
+      .toBe('/legal/consent?return=%2Fhome%2F6page')
+    expect(completionRedirectForApiError(428, 'ONBOARDING_REQUIRED', '/home/3page?tab=received'))
+      .toBe('/onboarding?return=%2Fhome%2F3page%3Ftab%3Dreceived')
+    expect(completionRedirectForApiError(401, 'ONBOARDING_REQUIRED', '/home/6page')).toBeNull()
   })
 })

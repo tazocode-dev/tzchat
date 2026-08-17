@@ -30,9 +30,9 @@
             <button class="selector-close" @click="closeSelector" aria-label="닫기">×</button>
           </div>
 
-          <!-- ✅ 항상 8칸 고정 표시 -->
+          <!-- 기본 8칸을 표시하고, 기존 사진이 더 많으면 모두 유지해 표시 -->
           <div class="slot-grid">
-            <div v-for="n in MAX_SLOTS" :key="n" class="slot">
+            <div v-for="n in visibleSlotCount" :key="n" class="slot">
               <!-- 이미지 타일 -->
               <template v-if="n - 1 < images.length">
                 <div class="slot-box">
@@ -47,8 +47,27 @@
                 </div>
               </template>
               <!-- 추가 버튼 -->
+              <template v-else-if="canAddProfilePhoto(images.length, n - 1)">
+                <div
+                  class="slot-empty"
+                  role="button"
+                  tabindex="0"
+                  aria-label="사진 추가"
+                  @click="chooseFile(n - 1)"
+                  @keydown.enter.prevent="chooseFile(n - 1)"
+                >+</div>
+              </template>
               <template v-else>
-                <div class="slot-empty" @click="chooseFile(n - 1)" role="button" aria-label="사진 추가">+</div>
+                <div
+                  class="slot-locked"
+                  role="button"
+                  aria-disabled="true"
+                  :aria-label="`사진 ${n} 잠금`"
+                  @click="showPhotoLimit"
+                >
+                  <span aria-hidden="true">🔒</span>
+                  <span>잠금</span>
+                </div>
               </template>
             </div>
           </div>
@@ -197,6 +216,10 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import api from '@/shared/services/api'
 import { API_ORIGIN } from '@/shared/config/runtimeEnvironment'
+import {
+  PROFILE_PHOTO_LIMIT_MESSAGE,
+  canAddProfilePhoto,
+} from '@/features/profile/services/profilePhotoPolicy'
 
 /** ===== 설정 ===== */
 const MAX_SLOTS = 8
@@ -293,6 +316,7 @@ const gender = computed(() => props.gender || '')
 const readonly = computed(() => !!props.readonly)
 const images = ref<ProfileImage[]>([])
 const profileMain = ref<string>('')
+const visibleSlotCount = computed(() => Math.max(MAX_SLOTS, images.value.length))
 
 function isFemale(g: string) {
   const s = (g || '').toLowerCase()
@@ -351,12 +375,23 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadSlotIdx = ref<number>(-1)
 const errorMsg = ref(''); const successMsg = ref('')
 
-function chooseFile(idx: number) { if (readonly.value) return; uploadSlotIdx.value = idx; fileInput.value?.click() }
+function showPhotoLimit() {
+  successMsg.value = ''
+  errorMsg.value = PROFILE_PHOTO_LIMIT_MESSAGE
+}
+function chooseFile(idx: number) {
+  if (readonly.value) return
+  if (!canAddProfilePhoto(images.value.length, idx)) { showPhotoLimit(); return }
+  errorMsg.value = ''
+  uploadSlotIdx.value = idx
+  fileInput.value?.click()
+}
 function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  if (!canAddProfilePhoto(images.value.length, uploadSlotIdx.value)) { showPhotoLimit(); return }
   openCropWithFile(file)
 }
 
@@ -383,6 +418,7 @@ const cropImgStyle = computed(() => ({
 }))
 function openCropWithFile(file: File) {
   if (readonly.value) return
+  if (!canAddProfilePhoto(images.value.length, uploadSlotIdx.value)) { showPhotoLimit(); return }
   const reader = new FileReader()
   reader.onload = () => { cropSrc.value = String(reader.result || ''); cropOpen.value = true }
   reader.readAsDataURL(file)
@@ -443,6 +479,11 @@ function onWheel(ev: WheelEvent) { const delta = -ev.deltaY * 0.001; cropScale.v
 /** ✅ DOMRect 기반: 미리보기와 동일 영역으로 자르기 */
 async function confirmCrop() {
   if (!cropImgEl.value || !cropBoxEl.value || cropping.value) return
+  if (!canAddProfilePhoto(images.value.length, uploadSlotIdx.value)) {
+    showPhotoLimit()
+    closeCrop()
+    return
+  }
   cropping.value = true
   try {
     const img = cropImgEl.value
@@ -647,7 +688,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 /* 그리드 */
 .slot-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 8px; padding: 6px 2px; }
 .slot { display: flex; flex-direction: column; gap: 6px; }
-.slot-img, .slot-empty {
+.slot-img, .slot-empty, .slot-locked {
   width: 100%; aspect-ratio: 1/1; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   background: #f7f7f7; border: 1px dashed #ddd; color: #888;
@@ -657,6 +698,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .badge-main{ position: absolute; left: 6px; top: 6px; padding: 2px 6px; border-radius: 999px; background: #111; color: #fff; font-size: 12px; font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
 .slot-del { position: absolute; right: 6px; top: 6px; width: 26px; height: 26px; border-radius: 999px; border: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 18px; line-height: 26px; cursor: pointer; }
 .slot-empty { font-size: 28px; cursor: pointer; }
+.slot-locked {
+  flex-direction: column;
+  gap: 3px;
+  border-style: solid;
+  background: #ececec;
+  color: #666;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: not-allowed;
+}
+.slot-locked span[aria-hidden="true"] { font-size: 20px; line-height: 1; }
 /* 삭제 모달 */
 .confirm-title { margin: 0 0 12px; font-weight: 800; }
 .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

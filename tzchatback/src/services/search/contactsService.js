@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────
 
 const { User } = require('@/models');
+const { requireCurrentActiveOptIn } = require('@/services/legal/termsPublicService');
 
 class ContactsError extends Error {
   constructor(status, message) {
@@ -19,7 +20,7 @@ const s = (v) => (typeof v === 'string' ? v.trim() : v ?? '');
    - 앱에서 읽어온 연락처 전화번호를 클라이언트에서 SHA-256 후 전송
    - 서버에서는 그대로 저장(중복 제거만)
 */
-async function saveContactHashes(userId, hashesRaw) {
+async function saveContactHashes(userId, hashesRaw, dependencies = {}) {
   const list = Array.isArray(hashesRaw) ? hashesRaw : [];
   if (!list.length) {
     throw new ContactsError(400, 'hashes 배열이 비어 있습니다.');
@@ -35,7 +36,11 @@ async function saveContactHashes(userId, hashesRaw) {
     throw new ContactsError(400, '유효한 해시가 없습니다.');
   }
 
-  const updated = await User.findByIdAndUpdate(
+  const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
+  await requireOptIn(userId, 'contacts-consent', dependencies);
+
+  const UserModel = dependencies.UserModel || User;
+  const updated = await UserModel.findByIdAndUpdate(
     userId,
     { $set: { localContactHashes: hashes } },
     { new: true }
@@ -47,8 +52,9 @@ async function saveContactHashes(userId, hashesRaw) {
 }
 
 // 내 연락처 해시 전체 삭제 + search_disconnectLocalContacts를 OFF로(보조)
-async function clearContactHashes(userId) {
-  const updated = await User.findByIdAndUpdate(
+async function clearContactHashes(userId, dependencies = {}) {
+  const UserModel = dependencies.UserModel || User;
+  const updated = await UserModel.findByIdAndUpdate(
     userId,
     {
       $set: {

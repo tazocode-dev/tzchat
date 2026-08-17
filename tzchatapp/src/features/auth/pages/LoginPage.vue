@@ -152,9 +152,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { toastController } from '@ionic/vue'
 import { auth as AuthAPI, clearAccountScopedLocalData, setAuthToken } from '@/shared/services/api'
+import { useUserStore } from '@/shared/stores/user'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 const { t } = useI18n()
 
 const phone = ref<string>('')
@@ -449,6 +451,8 @@ const verifyCode = async () => {
     await AuthAPI.verifyPhoneCode(phoneDigits.value, code.value.trim())
     code.value = ''
 
+    // 직전 계정의 /api/me 캐시를 사용하지 않고 방금 인증한 전화번호 계정을 확정한다.
+    await userStore.bootstrapAuth({ force: true, silent: true })
     router.replace(redirectTarget())
   } catch (err: any) {
     console.error('[HTTP][ERR] /api/auth/phone/verify', {

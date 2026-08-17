@@ -73,6 +73,9 @@ async function patchPreference(req, res, next) {
     return res.json({ success: true, user: updated });
   } catch (err) {
     if (err instanceof SearchSettingsError) return res.status(err.status).json({ success: false, error: err.message });
+    if (err?.code === 'OPTIONAL_CONSENT_REQUIRED') {
+      return res.status(403).json({ ok: false, code: err.code, slug: err.details?.slug, message: err.message, error: err.message });
+    }
     next(err);
   }
 }
@@ -86,6 +89,9 @@ async function patchSettings(req, res, next) {
     return res.json({ ok: true, user: updated });
   } catch (err) {
     if (err instanceof SearchSettingsError) return res.status(err.status).json({ error: err.message });
+    if (err?.code === 'OPTIONAL_CONSENT_REQUIRED') {
+      return res.status(403).json({ ok: false, code: err.code, slug: err.details?.slug, message: err.message, error: err.message });
+    }
     next(err);
   }
 }

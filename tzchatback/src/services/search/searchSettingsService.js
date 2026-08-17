@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────
 
 const { User } = require('@/models');
+const { requireCurrentActiveOptIn } = require('@/services/legal/termsPublicService');
 
 class SearchSettingsError extends Error {
   constructor(status, message) {
@@ -86,9 +87,13 @@ async function updateSearchRegions(userId, body) {
   return { count: normalized.length, user: updated };
 }
 
-async function updateSearchPreference(userId, preferenceRaw) {
+async function updateSearchPreference(userId, preferenceRaw, dependencies = {}) {
   const value = s(preferenceRaw) || '';
-  const updated = await User.findByIdAndUpdate(
+  const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
+  await requireOptIn(userId, 'sensitive-information-consent', dependencies);
+
+  const UserModel = dependencies.UserModel || User;
+  const updated = await UserModel.findByIdAndUpdate(
     userId,
     { $set: { search_preference: value } },
     { new: true }
@@ -104,7 +109,7 @@ async function updateSearchPreference(userId, preferenceRaw) {
      onlyWithPhoto, matchPremiumOnly,  // 각각 'ON'|'OFF'
    }
 */
-async function updateSearchToggles(userId, body) {
+async function updateSearchToggles(userId, body, dependencies = {}) {
   const {
     disconnectLocalContacts,
     allowFriendRequests,
@@ -135,7 +140,13 @@ async function updateSearchToggles(userId, body) {
     update.search_matchPremiumOnly = normOnOff(matchPremiumOnly);
   }
 
-  const updated = await User.findByIdAndUpdate(userId, { $set: update }, { new: true })
+  if (update.search_disconnectLocalContacts === 'ON') {
+    const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
+    await requireOptIn(userId, 'contacts-consent', dependencies);
+  }
+
+  const UserModel = dependencies.UserModel || User;
+  const updated = await UserModel.findByIdAndUpdate(userId, { $set: update }, { new: true })
     .select('search_disconnectLocalContacts search_allowFriendRequests search_allowNotifications search_onlyWithPhoto search_matchPremiumOnly')
     .lean();
 

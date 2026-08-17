@@ -13,6 +13,7 @@ import axios, {
 } from 'axios'
 import { API_BASE_URL } from '@/shared/config/runtimeEnvironment'
 import { appendNativePushTokenToLogout } from '@/shared/services/nativePushTokenStorage'
+import { completionRedirectForApiError } from '@/shared/services/accountCompletion'
 
 const IS_DEV = import.meta.env.DEV
 const HTTP_DEBUG = IS_DEV && import.meta.env.VITE_HTTP_DEBUG === 'true'
@@ -60,6 +61,7 @@ const REFRESH_TOKEN_KEY = 'TZCHAT_REFRESH_TOKEN'
 // ✅ 웹뷰/localStorage가 느릴 수 있어 메모리 캐시를 둡니다.
 let cachedToken: string | null = null
 let cachedRefreshToken: string | null = null
+let authCredentialRevision = 0
 let suppressAuthChangeEvent = false
 let lastAuthClearEventAt = 0
 
@@ -96,20 +98,23 @@ function readRefreshTokenFromStorage(): string | null {
 
 export function setRefreshToken(tok: string | null) {
   const hadCredentials = !!cachedToken || !!cachedRefreshToken
+  const previous = cachedRefreshToken
   const next = tok && String(tok).trim() ? String(tok).trim() : null
   cachedRefreshToken = next
   try {
     if (next) localStorage.setItem(REFRESH_TOKEN_KEY, next)
     else localStorage.removeItem(REFRESH_TOKEN_KEY)
   } catch {}
+  if (previous !== next) authCredentialRevision += 1
   const hasCredentials = !!cachedToken || !!cachedRefreshToken
-  if (hadCredentials !== hasCredentials) emitAuthCredentialsChanged(!hasCredentials)
+  if (previous !== next || hadCredentials !== hasCredentials) emitAuthCredentialsChanged(!hasCredentials)
 }
 
 export function getStoredAuthState() {
   return {
     hasAccessToken: !!getAuthToken(),
     hasRefreshToken: !!getRefreshToken(),
+    credentialRevision: authCredentialRevision,
   }
 }
 
@@ -142,6 +147,7 @@ function getAuthToken(): string | null {
 // ✅ 외부에서도 쓰는 함수: 저장 + 캐시 + axios 기본헤더 즉시 반영
 export function setAuthToken(tok: string | null) {
   const hadCredentials = !!cachedToken || !!cachedRefreshToken
+  const previous = cachedToken
   const next = tok && String(tok).trim() ? String(tok).trim() : null
   cachedToken = next
 
@@ -156,8 +162,15 @@ export function setAuthToken(tok: string | null) {
   } else {
     try { delete (api.defaults.headers as any).Authorization } catch {}
   }
+  if (previous !== next) {
+    authCredentialRevision += 1
+    profileImageCache.clear()
+    profileImageRequests.clear()
+    agreementStatusCache = null
+    agreementStatusRequest = null
+  }
   const hasCredentials = !!cachedToken || !!cachedRefreshToken
-  if (hadCredentials !== hasCredentials) emitAuthCredentialsChanged(!hasCredentials)
+  if (previous !== next || hadCredentials !== hasCredentials) emitAuthCredentialsChanged(!hasCredentials)
 }
 
 export function clearAuthToken() {
@@ -353,13 +366,12 @@ api.interceptors.response.use(
 
     // 서버가 세션 도중 새 필수 약관 또는 잘못된 프로필 상태를 발견한 경우에도
     // 현재 화면에 머물지 않고 완료 흐름으로 복귀한다.
-    if (status === 403 && code === 'AGREEMENTS_REQUIRED') {
-      const current = window.location.pathname + window.location.search
-      safeRedirect(`/legal/consent?return=${encodeURIComponent(current)}`)
-    } else if (status === 403 && code === 'ONBOARDING_REQUIRED') {
-      const current = window.location.pathname + window.location.search
-      safeRedirect(`/onboarding?return=${encodeURIComponent(current)}`)
-    }
+    const completionRedirect = completionRedirectForApiError(
+      status,
+      code,
+      window.location.pathname + window.location.search,
+    )
+    if (completionRedirect) safeRedirect(completionRedirect)
 
     const isExpectedError = status !== undefined && authConfig?.expectedErrorStatuses?.includes(status)
     if (!isExpectedError) {

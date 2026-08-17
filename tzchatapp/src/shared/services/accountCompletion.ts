@@ -38,3 +38,14 @@ export function hasCompletedProfileOnboarding(me: MeUser, now = new Date()) {
   const gender = String(me.gender || '').trim().toLowerCase()
   return hasAdultAgeInformation(me, now) && VALID_GENDERS.has(gender)
 }
+
+export function completionRedirectForApiError(status: number | undefined, code: string, current: string) {
+  if (status !== 403 && status !== 428) return null
+  if (code === 'AGREEMENTS_REQUIRED') {
+    return `/legal/consent?return=${encodeURIComponent(current)}`
+  }
+  if (code === 'ONBOARDING_REQUIRED') {
+    return `/onboarding?return=${encodeURIComponent(current)}`
+  }
+  return null
+}

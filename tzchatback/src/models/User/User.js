@@ -102,7 +102,7 @@ const userSchema = new mongoose.Schema(
     // [2] 프로필
     region1: { type: String, default: '미지정' },
     region2: { type: String, default: '미지정' },
-    preference: { type: String, default: '이성친구 - 일반' },
+    preference: { type: String, default: '' },
     selfintro: { type: String, default: '' },
 
     profileImages: { type: [ProfileImageSchema], default: [] },
@@ -113,7 +113,7 @@ const userSchema = new mongoose.Schema(
     search_birthyear2: { type: Number, default: null },
     search_region1: { type: String, default: '전체' },
     search_region2: { type: String, default: '전체' },
-    search_preference: { type: String, default: '이성친구 - 전체' },
+    search_preference: { type: String, default: '' },
 
     // 유료회원 관련
     user_level: {

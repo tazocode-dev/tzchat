@@ -3,7 +3,7 @@
     <ion-content :fullscreen="true" class="onboarding-content">
       <main class="onboarding-shell" :aria-busy="loading || submitting">
         <header class="onboarding-header">
-          <span class="brand">TZChat</span>
+          <span class="brand">손끝</span>
           <span class="progress">{{ step === 'birthDate' ? '1 / 2' : '2 / 2' }}</span>
         </header>
 

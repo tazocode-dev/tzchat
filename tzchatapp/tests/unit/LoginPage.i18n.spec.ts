@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, test, vi } from 'vitest'
 import { createRouter, createMemoryHistory } from 'vue-router'
+import { createPinia } from 'pinia'
 import i18n from '@/i18n'
 import LoginPage from '@/features/auth/pages/LoginPage.vue'
 import { auth as AuthAPI } from '@/shared/services/api'
@@ -18,7 +19,7 @@ describe('LoginPage.vue i18n', () => {
     await router.push('/')
     await router.isReady()
     const wrapper = mount(LoginPage, {
-      global: { plugins: [i18n, router] },
+      global: { plugins: [createPinia(), i18n, router] },
     })
     const text = wrapper.text()
     expect(text).toContain('손끝')
@@ -35,7 +36,7 @@ describe('LoginPage.vue i18n', () => {
     await router.push('/')
     await router.isReady()
     const wrapper = mount(LoginPage, {
-      global: { plugins: [i18n, router] },
+      global: { plugins: [createPinia(), i18n, router] },
     })
 
     const entry = wrapper.get('.phone-change-entry')

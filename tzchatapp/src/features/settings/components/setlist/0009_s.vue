@@ -22,7 +22,7 @@
       </div>
 
       <Teleport to="body">
-        <!-- 🔲 4칸 선택/업로드 팝업 -->
+        <!-- 🔲 8칸 선택/업로드 팝업 -->
         <div
         v-if="selectorOpen"
         class="selector"
@@ -38,23 +38,39 @@
           </div>
 
           <div class="slot-grid">
-            <div v-for="(slot, idx) in 4" :key="idx" class="slot">
+            <div v-for="n in visibleSlotCount" :key="n" class="slot">
               <!-- 상단: 이미지 있으면 썸네일 + (x) 삭제버튼 / 없으면 큰 + -->
-              <div class="slot-box" v-if="slotImage(idx)">
+              <div class="slot-box" v-if="slotImage(n - 1)">
                 <img
                   class="slot-img"
-                  :src="slotImage(idx)!.urls.thumb"
-                  :alt="`사진 ${idx+1}`"
-                  @click="openViewerAt(idx)"
+                  :src="slotImage(n - 1)!.urls.thumb"
+                  :alt="`사진 ${n}`"
+                  @click="openViewerAt(n - 1)"
                 />
                 <!-- 대표 배지 -->
-                <span class="badge-main" v-if="isMain(slotImage(idx)!)">대표</span>
-                <button class="slot-del" @click.stop="askDelete(slotImage(idx)!)" aria-label="사진 삭제">×</button>
+                <span class="badge-main" v-if="isMain(slotImage(n - 1)!)">대표</span>
+                <button class="slot-del" @click.stop="askDelete(slotImage(n - 1)!)" aria-label="사진 삭제">×</button>
               </div>
-              <div class="slot-empty" v-else @click="chooseFile(idx)" role="button" aria-label="사진 추가">+</div>
-
-              <!-- 하단: (+) — 위 사각형과 동일 크기/스타일 -->
-              <button class="slot-add" @click="chooseFile(idx)" aria-label="사진 추가/교체">+</button>
+              <div
+                v-else-if="canAddProfilePhoto(images.length, n - 1)"
+                class="slot-empty"
+                role="button"
+                tabindex="0"
+                aria-label="사진 추가"
+                @click="chooseFile(n - 1)"
+                @keydown.enter.prevent="chooseFile(n - 1)"
+              >+</div>
+              <div
+                v-else
+                class="slot-locked"
+                role="button"
+                aria-disabled="true"
+                :aria-label="`사진 ${n} 잠금`"
+                @click="showPhotoLimit"
+              >
+                <span aria-hidden="true">🔒</span>
+                <span>잠금</span>
+              </div>
             </div>
           </div>
 
@@ -141,6 +157,12 @@ import {
 } from '@ionic/vue'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import api from '@/shared/services/api'
+import {
+  PROFILE_PHOTO_LIMIT_MESSAGE,
+  canAddProfilePhoto,
+} from '@/features/profile/services/profilePhotoPolicy'
+
+const MAX_SLOTS = 8
 
 const DEFAULT_MAN = '/img/man.jpg'
 const DEFAULT_WOMAN = '/img/woman.jpg'
@@ -166,6 +188,7 @@ function isFemale(g: string) {
 
 const images = ref<ProfileImage[]>([])
 const profileMain = ref<string>('')
+const visibleSlotCount = computed(() => Math.max(MAX_SLOTS, images.value.length))
 
 // 상단 표시 이미지: 대표(또는 첫 장) → 없으면 성별 기본
 const mainDisplayUrl = computed(() => {
@@ -206,13 +229,23 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const uploadSlotIdx = ref<number>(-1)
 const errorMsg = ref(''); const successMsg = ref('')
 
-function chooseFile(idx: number) { uploadSlotIdx.value = idx; fileInput.value?.click() }
+function showPhotoLimit() {
+  successMsg.value = ''
+  errorMsg.value = PROFILE_PHOTO_LIMIT_MESSAGE
+}
+function chooseFile(idx: number) {
+  if (!canAddProfilePhoto(images.value.length, idx)) { showPhotoLimit(); return }
+  errorMsg.value = ''
+  uploadSlotIdx.value = idx
+  fileInput.value?.click()
+}
 
 async function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  if (!canAddProfilePhoto(images.value.length, uploadSlotIdx.value)) { showPhotoLimit(); return }
   errorMsg.value = ''; successMsg.value = ''
 
   try {
@@ -372,14 +405,14 @@ const trackStyle = computed(() => {
   background: #bcbcbc; color: #fff; font-size: 20px; cursor: pointer;
 }
 
-/* 4칸 × 2행 레이아웃 */
+/* 4칸 × 2행 기본 레이아웃 */
 .slot-grid {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 8px; padding: 6px 2px;
 }
 .slot { display: flex; flex-direction: column; gap: 6px; }
 
 /* 공통 사각형 */
-.slot-img, .slot-empty, .slot-add {
+.slot-img, .slot-empty, .slot-locked {
   width: 100%; aspect-ratio: 1/1; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
   background: #f7f7f7; border: 1px dashed #ddd; color: #888;
@@ -399,7 +432,17 @@ const trackStyle = computed(() => {
   color: #fff; font-size: 18px; line-height: 26px; cursor: pointer;
 }
 .slot-empty { font-size: 28px; cursor: pointer; }
-.slot-add   { font-size: 24px; font-weight: 700; cursor: pointer; }
+.slot-locked {
+  flex-direction: column;
+  gap: 3px;
+  border-style: solid;
+  background: #ececec;
+  color: #666;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: not-allowed;
+}
+.slot-locked span[aria-hidden="true"] { font-size: 20px; line-height: 1; }
 
 /* 삭제 확인 모달 */
 .confirm {

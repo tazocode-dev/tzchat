@@ -10,11 +10,13 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount } from 'vue'
 import { IonApp } from '@ionic/vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRouter } from 'vue-router'
 import { setupAndroidBackButton, teardownAndroidBackButton } from '@/shared/services/backButton'
 
+const router = useRouter()
+
 onMounted(() => {
-  setupAndroidBackButton()
+  setupAndroidBackButton(router)
 })
 onBeforeUnmount(() => {
   teardownAndroidBackButton()

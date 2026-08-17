@@ -50,9 +50,6 @@ import setting01 from '@/features/settings/components/setlist/0001_s_notice.vue'
 import setting02 from '@/features/settings/components/setlist/0002_s.vue'
 import setting03 from '@/features/settings/components/setlist/0003_s.vue'
 import setting04 from '@/features/settings/components/setlist/0004_s.vue'
-import setting05 from '@/features/settings/components/setlist/0005_s.vue'
-import setting06 from '@/features/settings/components/setlist/0006_s.vue'
-import setting07 from '@/features/settings/components/setlist/0007_s.vue'
 import setting08 from '@/features/settings/components/setlist/0008_s.vue'
 import setting09 from '@/features/settings/components/setlist/0009_s.vue'
 import setting10 from '@/features/settings/components/setlist/0010_s.vue'
@@ -166,9 +163,9 @@ const routes: RouteRecordRaw[] = [
 
       { path: 'setting/0003', component: setting03 },
       { path: 'setting/0004', component: setting04 },
-      { path: 'setting/0005', component: setting05 },
-      { path: 'setting/0006', component: setting06 },
-      { path: 'setting/0007', component: setting07 },
+      { path: 'setting/0005', redirect: '/home/legals/v2/privacy' },
+      { path: 'setting/0006', redirect: '/home/legals/v2/terms' },
+      { path: 'setting/0007', redirect: '/home/legals/v2/youth-policy' },
       { path: 'setting/0008', component: setting08 },
       { path: 'setting/0009', component: setting09 },
       { path: 'setting/0010', component: setting10 },

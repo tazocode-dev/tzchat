@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────
 
 const { User } = require('@/models');
+const { requireCurrentActiveOptIn } = require('@/services/legal/termsPublicService');
 
 class ProfileError extends Error {
   constructor(status, message) {
@@ -45,9 +46,12 @@ async function updateSelfintro(userId, selfintroRaw) {
 // ※ 기존 동기화 규칙 유지:
 //   - '이성친구'로 시작하면 search_preference = '이성친구 - 전체'
 //   - '동성친구'로 시작하면 search_preference = '동성친구 - 전체'
-async function updatePreference(userId, preferenceRaw) {
+async function updatePreference(userId, preferenceRaw, dependencies = {}) {
   const prefStr = String(preferenceRaw ?? '').trim();
   if (!prefStr) throw new ProfileError(400, '값이 부족합니다.');
+
+  const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
+  await requireOptIn(userId, 'sensitive-information-consent', dependencies);
 
   const updateDoc = { preference: prefStr };
   if (prefStr.startsWith('이성친구')) {
@@ -56,7 +60,8 @@ async function updatePreference(userId, preferenceRaw) {
     updateDoc.search_preference = '동성친구 - 전체';
   }
 
-  const user = await User.findByIdAndUpdate(userId, updateDoc, { new: true });
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findByIdAndUpdate(userId, updateDoc, { new: true });
   if (!user) throw new ProfileError(404, '사용자 없음');
   return { preference: user.preference, search_preference: user.search_preference };
 }

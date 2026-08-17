@@ -3,31 +3,80 @@
 // 공개 약관/동의 도메인 서비스 (지침 §1). routes/legal/termsPublicRouter.js에서 분리.
 // ────────────────────────────────────────────────────────────
 
-const { Terms, UserAgreement } = require('@/models');
+const { Terms, User, UserAgreement } = require('@/models');
 
 // 서비스 이용에 항상 필요한 공개 정책은 page 문서여도 가입 시 명시적 확인을 받는다.
 const REQUIRED_POLICY_SLUGS = ['terms', 'guidelines', 'youth-policy'];
+const REQUIRED_AGREEMENT_SLUGS = [...REQUIRED_POLICY_SLUGS, 'privacy-consent'];
+const TERMS_CONFIGURATION_ERROR = 'TERMS_CONFIGURATION_ERROR';
+const CONTACTS_CONSENT_SLUG = 'contacts-consent';
+const SENSITIVE_INFORMATION_CONSENT_SLUG = 'sensitive-information-consent';
 
 function agreementDocumentFilter() {
   return {
     isActive: true,
     $or: [
       { kind: 'consent' },
-      { slug: { $in: REQUIRED_POLICY_SLUGS } },
+      { slug: { $in: REQUIRED_AGREEMENT_SLUGS } },
     ],
   };
 }
 
 function isRequiredAgreement(doc) {
-  return REQUIRED_POLICY_SLUGS.includes(String(doc?.slug || '')) ||
+  return REQUIRED_AGREEMENT_SLUGS.includes(String(doc?.slug || '')) ||
     !!doc?.isRequired || !!doc?.defaultRequired;
 }
 
 class TermsPublicError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code, details = {}) {
     super(message);
     this.status = status;
+    this.code = code;
+    this.details = details;
   }
+}
+
+function assertRequiredPoliciesConfigured(activeDocuments) {
+  const configured = new Set(activeDocuments.map(doc => String(doc?.slug || '')));
+  const missingRequiredSlugs = REQUIRED_AGREEMENT_SLUGS.filter(slug => !configured.has(slug));
+  if (missingRequiredSlugs.length > 0) {
+    throw new TermsPublicError(
+      503,
+      `필수 약관 메타데이터가 설정되지 않았습니다: ${missingRequiredSlugs.join(', ')}`,
+      TERMS_CONFIGURATION_ERROR,
+      { missingRequiredSlugs },
+    );
+  }
+}
+
+async function hasCurrentActiveOptIn(userId, slugInput, dependencies = {}) {
+  const slug = String(slugInput || '').trim();
+  if (!userId || !slug) return false;
+
+  const TermsModel = dependencies.TermsModel || Terms;
+  const UserAgreementModel = dependencies.UserAgreementModel || UserAgreement;
+  const activeDocument = await TermsModel.findOne({ slug, kind: 'consent', isActive: true })
+    .select('slug version')
+    .lean();
+  if (!activeDocument) return false;
+
+  const agreement = await UserAgreementModel.findOne({
+    userId,
+    slug,
+    version: String(activeDocument.version),
+    optedIn: true,
+  }).select('_id').lean();
+  return !!agreement;
+}
+
+async function requireCurrentActiveOptIn(userId, slug, dependencies = {}) {
+  if (await hasCurrentActiveOptIn(userId, slug, dependencies)) return;
+  throw new TermsPublicError(
+    403,
+    '이 기능을 사용하려면 현재 선택 동의가 필요합니다.',
+    'OPTIONAL_CONSENT_REQUIRED',
+    { slug },
+  );
 }
 
 // GET /api/terms/active — 활성 문서 전체(페이지 + 동의서)
@@ -70,13 +119,16 @@ async function listVersions(slugInput) {
 }
 
 // POST /api/terms/consents — 단일 동의 저장/갱신
-async function saveConsent({ userId, slug, version, optedIn, req }) {
+async function saveConsent({ userId, slug, version, optedIn, req }, dependencies = {}) {
   if (!userId) throw new TermsPublicError(401, 'unauthorized');
   if (!slug || !version || typeof slug !== 'string' || typeof version !== 'string') {
     throw new TermsPublicError(400, 'slug/version은 문자열이어야 합니다.');
   }
 
-  const doc = await Terms.findOne({ slug, isActive: true })
+  const TermsModel = dependencies.TermsModel || Terms;
+  const UserModel = dependencies.UserModel || User;
+  const UserAgreementModel = dependencies.UserAgreementModel || UserAgreement;
+  const doc = await TermsModel.findOne({ slug, isActive: true })
     .select('_id slug title version kind isRequired defaultRequired')
     .lean();
   if (!doc) throw new TermsPublicError(404, '활성 문서를 찾을 수 없습니다.');
@@ -84,8 +136,20 @@ async function saveConsent({ userId, slug, version, optedIn, req }) {
     throw new TermsPublicError(400, '요청 버전이 활성 버전과 일치하지 않습니다.');
   }
 
+  if (optedIn === false && (slug === CONTACTS_CONSENT_SLUG || slug === SENSITIVE_INFORMATION_CONSENT_SLUG)) {
+    const cleanup = slug === CONTACTS_CONSENT_SLUG
+      ? { localContactHashes: [], search_disconnectLocalContacts: 'OFF' }
+      : { preference: '', search_preference: '' };
+    const cleaned = await UserModel.findByIdAndUpdate(
+      userId,
+      { $set: cleanup },
+      { new: true },
+    ).select('_id');
+    if (!cleaned) throw new TermsPublicError(404, '사용자를 찾을 수 없습니다.');
+  }
+
   const now = new Date();
-  await UserAgreement.updateOne(
+  await UserAgreementModel.updateOne(
     { userId, slug }, // slug 기준 1개 행 유지
     {
       $set: {
@@ -108,13 +172,16 @@ async function saveConsent({ userId, slug, version, optedIn, req }) {
 }
 
 // ===== 공통 빌더 =====
-async function fetchActiveConsentWithUser(userId) {
-  const activeConsents = await Terms.find(agreementDocumentFilter())
+async function fetchActiveConsentWithUser(userId, dependencies = {}) {
+  const TermsModel = dependencies.TermsModel || Terms;
+  const UserAgreementModel = dependencies.UserAgreementModel || UserAgreement;
+  const activeConsents = await TermsModel.find(agreementDocumentFilter())
     .select('_id slug title version kind isRequired defaultRequired')
     .lean();
+  assertRequiredPoliciesConfigured(activeConsents);
 
   const slugs = activeConsents.map(d => d.slug);
-  const userAgreements = await UserAgreement.find({ userId, slug: { $in: slugs } })
+  const userAgreements = await UserAgreementModel.find({ userId, slug: { $in: slugs } })
     .select('slug version optedIn')
     .lean();
 
@@ -151,9 +218,9 @@ async function listAgreements(userId) {
 }
 
 // GET /api/terms/agreements/status (별칭 /status) — 대기 중 항목 + 전체 현황
-async function getAgreementsStatus(userId) {
+async function getAgreementsStatus(userId, dependencies = {}) {
   if (!userId) throw new TermsPublicError(401, 'unauthorized');
-  const items = await fetchActiveConsentWithUser(userId);
+  const items = await fetchActiveConsentWithUser(userId, dependencies);
   const pending = items
     .filter(i => i.pending)
     .map(i => ({
@@ -168,13 +235,51 @@ async function getAgreementsStatus(userId) {
 }
 
 // POST /api/terms/agreements/accept — 배치 저장
-async function acceptAgreements({ userId, slugsSelected, req, route }) {
+async function acceptAgreements({ userId, slugsSelected, req, route }, dependencies = {}) {
   if (!userId) throw new TermsPublicError(401, 'unauthorized');
-  if (!slugsSelected) throw new TermsPublicError(400, 'slugs는 문자열 배열이어야 합니다.');
+  if (!Array.isArray(slugsSelected) || slugsSelected.some(slug => typeof slug !== 'string' || !slug.trim())) {
+    throw new TermsPublicError(400, 'slugs는 비어 있지 않은 문자열 배열이어야 합니다.');
+  }
 
-  const activeConsents = await Terms.find(agreementDocumentFilter())
+  const TermsModel = dependencies.TermsModel || Terms;
+  const UserModel = dependencies.UserModel || User;
+  const UserAgreementModel = dependencies.UserAgreementModel || UserAgreement;
+  const activeConsents = await TermsModel.find(agreementDocumentFilter())
     .select('_id slug title version kind isRequired defaultRequired')
     .lean();
+  assertRequiredPoliciesConfigured(activeConsents);
+
+  const selected = new Set(slugsSelected.map(slug => slug.trim()));
+  const missingRequiredSlugs = activeConsents
+    .filter(isRequiredAgreement)
+    .map(doc => doc.slug)
+    .filter(slug => !selected.has(slug));
+  if (missingRequiredSlugs.length > 0) {
+    throw new TermsPublicError(
+      400,
+      `필수 약관 동의가 누락되었습니다: ${missingRequiredSlugs.join(', ')}`,
+      'REQUIRED_AGREEMENTS_MISSING',
+      { missingRequiredSlugs },
+    );
+  }
+
+  const cleanup = {};
+  if (activeConsents.some(doc => doc.slug === CONTACTS_CONSENT_SLUG) && !selected.has(CONTACTS_CONSENT_SLUG)) {
+    cleanup.localContactHashes = [];
+    cleanup.search_disconnectLocalContacts = 'OFF';
+  }
+  if (activeConsents.some(doc => doc.slug === SENSITIVE_INFORMATION_CONSENT_SLUG) && !selected.has(SENSITIVE_INFORMATION_CONSENT_SLUG)) {
+    cleanup.preference = '';
+    cleanup.search_preference = '';
+  }
+  if (Object.keys(cleanup).length > 0) {
+    const cleaned = await UserModel.findByIdAndUpdate(
+      userId,
+      { $set: cleanup },
+      { new: true },
+    ).select('_id');
+    if (!cleaned) throw new TermsPublicError(404, '사용자를 찾을 수 없습니다.');
+  }
 
   const now = new Date();
   const bulk = activeConsents.map(doc => ({
@@ -184,7 +289,7 @@ async function acceptAgreements({ userId, slugsSelected, req, route }) {
         $set: {
           version: String(doc.version),
           agreedAt: now,
-          optedIn: slugsSelected.includes(doc.slug),
+          optedIn: selected.has(doc.slug),
           docId: doc._id,
           meta: {
             title: doc.title,
@@ -201,7 +306,7 @@ async function acceptAgreements({ userId, slugsSelected, req, route }) {
   }));
 
   if (bulk.length > 0) {
-    const result = await UserAgreement.bulkWrite(bulk, { ordered: false });
+    const result = await UserAgreementModel.bulkWrite(bulk, { ordered: false });
     console.log(`[TERMS][POST]${route} bulkWrite done:`, {
       nUpserted: result?.upsertedCount ?? 0,
       nModified: result?.modifiedCount ?? 0,
@@ -262,13 +367,16 @@ async function agree({ userId, slug, version, req }) {
 }
 
 // GET /api/terms/require-consent
-async function getRequireConsent(userId) {
+async function getRequireConsent(userId, dependencies = {}) {
   if (!userId) throw new TermsPublicError(401, 'unauthorized');
 
-  const requiredDocs = await Terms.find(agreementDocumentFilter())
+  const TermsModel = dependencies.TermsModel || Terms;
+  const UserAgreementModel = dependencies.UserAgreementModel || UserAgreement;
+  const requiredDocs = await TermsModel.find(agreementDocumentFilter())
     .select('slug title version kind isRequired defaultRequired')
     .lean();
-  const userAgreements = await UserAgreement.find({ userId })
+  assertRequiredPoliciesConfigured(requiredDocs);
+  const userAgreements = await UserAgreementModel.find({ userId })
     .select('slug version optedIn')
     .lean();
 
@@ -285,7 +393,12 @@ async function getRequireConsent(userId) {
 }
 
 module.exports = {
+  REQUIRED_POLICY_SLUGS,
+  REQUIRED_AGREEMENT_SLUGS,
+  TERMS_CONFIGURATION_ERROR,
   TermsPublicError,
+  hasCurrentActiveOptIn,
+  requireCurrentActiveOptIn,
   listActive,
   getActiveBySlug,
   listVersions,

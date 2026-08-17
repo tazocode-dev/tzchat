@@ -7,8 +7,8 @@ import {
 } from '@/features/legal/constants/legals'
 import legalDocsSource from '@/features/legal/LegalDocs.vue?raw'
 import legalContainerSource from '@/features/legal/LegalContainer.vue?raw'
-import childSafetySettingSource from '@/features/settings/components/setlist/0007_s.vue?raw'
 import deletionSettingSource from '@/features/settings/components/setlist/0020_s_delete.vue?raw'
+import routerSource from '@/router/index.ts?raw'
 
 describe('GitHub Pages 법적 문서 연결', () => {
   test('목록은 공개 문서 4개만 제공한다', () => {
@@ -46,6 +46,11 @@ describe('GitHub Pages 법적 문서 연결', () => {
     expect(template).toContain('다시 시도')
     expect(template).toContain('v-if="frameReady && !frameError"')
     expect(template).toContain('v-if="isMaster && documentUrl"')
+    expect(template).toContain('class="mobile-document-help"')
+    expect(template).toContain('표 안에서 좌우로 밀어 전체 내용을 확인할 수 있습니다.')
+    expect(template).toContain('<a :href="documentUrl" target="_self">전체 화면으로 보기</a>')
+    expect(legalContainerSource).toContain('@media(max-width:560px)')
+    expect(legalContainerSource).toContain('.mobile-document-help{width:100%')
     expect(legalContainerSource).toContain("method: 'HEAD'")
     expect(legalContainerSource).toContain("cache: 'no-store'")
     expect(legalContainerSource).toContain('if (!response.ok)')
@@ -56,9 +61,16 @@ describe('GitHub Pages 법적 문서 연결', () => {
     expect(legalContainerSource).not.toContain('getTermVersions')
   })
 
-  test('아동 안전과 계정 삭제 설정에서 통합 법적 라우트로 진입한다', () => {
-    expect(childSafetySettingSource).toContain('/home/legals/v2/youth-policy')
-    expect(childSafetySettingSource).not.toContain('즉시 검토')
+  test('기존 법적 설정 딥링크는 컴포넌트 없이 canonical 내부 경로로 호환한다', () => {
+    expect(routerSource).toContain("{ path: 'setting/0005', redirect: '/home/legals/v2/privacy' }")
+    expect(routerSource).toContain("{ path: 'setting/0006', redirect: '/home/legals/v2/terms' }")
+    expect(routerSource).toContain("{ path: 'setting/0007', redirect: '/home/legals/v2/youth-policy' }")
+    expect(routerSource).not.toContain("@/features/settings/components/setlist/0005_s.vue")
+    expect(routerSource).not.toContain("@/features/settings/components/setlist/0006_s.vue")
+    expect(routerSource).not.toContain("@/features/settings/components/setlist/0007_s.vue")
+  })
+
+  test('계정 삭제 설정에서 canonical 삭제 안내로 진입한다', () => {
     expect(deletionSettingSource).toContain('/home/legals/v2/data-retention')
     expect(deletionSettingSource).toContain('계정 및 데이터 삭제 안내 보기')
     expect(deletionSettingSource).toContain('14일의 유예기간 후 영구 삭제됩니다.')

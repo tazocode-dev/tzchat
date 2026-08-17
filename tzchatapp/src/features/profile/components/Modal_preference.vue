@@ -81,6 +81,7 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from '@/shared/services/api'
 import { IonButton, IonSelect, IonSelectOption } from '@ionic/vue'
+import { isSensitiveInformationConsentRequiredError } from '@/features/profile/services/sensitivePreferenceConsent'
 
 const props = defineProps({
   message: { type: String, default: '' }, // 현재 저장된 성향(예: '이성친구 - 일반')
@@ -156,6 +157,11 @@ const submitPreference = async () => {
       errorMsg.value = res.data?.message || '수정 실패'
     }
   } catch (err) {
+    if (isSensitiveInformationConsentRequiredError(err)) {
+      newPreference.value = props.message || ''
+      errorMsg.value = '현재 버전의 민감정보 선택 동의가 필요합니다. 닫기 후 다시 설정해 주세요.'
+      return
+    }
     const msg = err?.response?.data?.message || '서버 오류가 발생했습니다.'
     errorMsg.value = msg
   }

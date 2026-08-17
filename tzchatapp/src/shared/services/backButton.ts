@@ -1,72 +1,65 @@
-// src/lib/backButton.ts
-// ✅ Android(하드웨어) 뒤로가기 처리 - Ionic 컨텍스트(navManager/useBackButton) 비의존 안전 버전
+import type { Router } from 'vue-router'
 import { App as CapApp } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
+import { toastController } from '@ionic/vue'
+import {
+  createBackButtonHandler,
+  createSingleBackButtonRegistration,
+} from '@/shared/services/backButtonPolicy'
 
-let removeListener: (() => void) | null = null
+let registration: ReturnType<typeof createSingleBackButtonRegistration> | null = null
 
-export function setupAndroidBackButton() {
-  // SSR/테스트 환경 가드
-  if (typeof window === 'undefined' || typeof document === 'undefined') return
-  // 중복 등록 방지
-  if (removeListener) return
+function dismissTopOverlay() {
+  const overlays = Array.from(document.querySelectorAll<HTMLElement & {
+    overlayIndex?: number
+    dismiss?: () => Promise<boolean>
+  }>(
+    'ion-alert,ion-action-sheet,ion-loading,ion-modal,ion-picker-legacy,ion-popover,ion-toast:not(#android-exit-prompt)',
+  )).filter((item) => Number(item.overlayIndex) > 0 && !item.classList.contains('overlay-hidden'))
+  overlays.sort((left, right) => Number(left.overlayIndex) - Number(right.overlayIndex))
+  const overlay = overlays[overlays.length - 1]
+  if (!overlay) return Promise.resolve(false)
+  return Promise.resolve(overlay.dismiss?.()).then(() => true, () => true)
+}
 
-  const handler = async () => {
-    // 1) 열린 오버레이(ion-modal/ion-alert/ion-action-sheet/ion-popover) 우선 닫기
-    const overlay = document.querySelector<HTMLElement>(
-      'ion-modal, ion-alert, ion-action-sheet, ion-popover'
-    ) as any
-    if (overlay && typeof overlay.dismiss === 'function') {
-      try { await overlay.dismiss() } catch {}
-      return
-    }
+function blurActiveInput() {
+  const active = document.activeElement as HTMLElement | null
+  const isInput = active?.tagName === 'INPUT' || active?.tagName === 'TEXTAREA' || active?.isContentEditable
+  if (!active || !isInput) return false
+  try { active.blur() } catch {}
+  return true
+}
 
-    // 2) 입력 포커스 해제(키보드 닫기)
-    const active = document.activeElement as HTMLElement | null
-    if (active && (
-      active.tagName === 'INPUT' ||
-      active.tagName === 'TEXTAREA' ||
-      (active as any).isContentEditable
-    )) {
-      try { (active as HTMLInputElement).blur?.() } catch {}
-      return
-    }
+export function setupAndroidBackButton(router: Router) {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || registration) return
 
-    // 3) 브라우저 히스토리가 있으면 뒤로가기
-    if (window.history.length > 1) {
-      window.history.back()
-      return
-    }
-
-    // 4) 네이티브 환경이면 앱 종료(안드로이드 관례)
-    if (Capacitor.isNativePlatform()) {
-      try { CapApp.exitApp() } catch {}
-      return
-    }
-    // 5) 웹 환경이면 no-op (루트)
-  }
-
-  // Capacitor v5: backButton 이벤트 구독
-  CapApp.addListener('backButton', handler).then((rm) => {
-    removeListener = () => {
-      try { rm.remove() } catch {}
-      removeListener = null
-    }
-  }).catch(() => {
-    // 이벤트 바인딩 실패 시 브라우저 fallback: history popstate에 가볍게 연결(선택)
-    const onKey = (e: KeyboardEvent) => {
-      // 데스크톱 디버깅용: Alt+Left = 뒤로
-      if (e.altKey && e.key === 'ArrowLeft') handler()
-    }
-    window.addEventListener('keydown', onKey)
-    removeListener = () => {
-      window.removeEventListener('keydown', onKey)
-      removeListener = null
-    }
+  const handler = createBackButtonHandler({
+    getPath: () => router.currentRoute.value.path || '',
+    hasInternalHistory: () => router.options.history.state.back != null,
+    dismissTopOverlay,
+    blurActiveInput,
+    goBack: () => router.back(),
+    goHome: () => { router.replace('/home/6page').catch(() => {}) },
+    showExitPrompt: async () => {
+      const toast = await toastController.create({
+        id: 'android-exit-prompt',
+        message: '한 번 더 누르면 앱이 종료됩니다.',
+        duration: 2_000,
+        position: 'bottom',
+      })
+      await toast.present()
+    },
+    exitApp: () => { CapApp.exitApp() },
   })
+
+  registration = createSingleBackButtonRegistration({
+    shouldRegister: () => Capacitor.getPlatform() === 'android',
+    addListener: () => CapApp.addListener('backButton', handler),
+  })
+  registration.setup()
 }
 
 export function teardownAndroidBackButton() {
-  try { removeListener?.() } catch {}
-  removeListener = null
+  registration?.teardown()
+  registration = null
 }

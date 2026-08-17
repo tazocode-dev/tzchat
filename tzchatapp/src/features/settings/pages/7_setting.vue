@@ -192,7 +192,7 @@ async function openSupportMail() {
     catch (err) { console.error('❌ 문의 사용자 정보 조회 실패:', err) }
   }
   const email = 'tazocode@gmail.com'
-  const subject = 'TZChat 문의드립니다'
+  const subject = '손끝 문의드립니다'
   const [appVersion, os, uid, nick] = await Promise.all([
     getAppVersion(),
     Promise.resolve(detectOS()),

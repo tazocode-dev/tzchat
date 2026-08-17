@@ -104,6 +104,9 @@ async function patchPreference(req, res) {
     if (err instanceof ProfileError) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
+    if (err?.code === 'OPTIONAL_CONSENT_REQUIRED') {
+      return res.status(403).json({ ok: false, code: err.code, slug: err.details?.slug, message: err.message, error: err.message });
+    }
     console.error('[API][ERR]', { path: req.baseUrl + req.path, message: err?.message, name: err?.name });
     return res.status(500).json({ success: false, message: '서버 에러' });
   }

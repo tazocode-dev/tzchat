@@ -202,6 +202,13 @@ ion-alert.profile-select-alert .alert-button {
   font-weight: 800;
 }
 
+/* 선택 동의 안내는 HTML 없이 일반 문자열의 줄바꿈을 그대로 표시한다. */
+ion-alert.tz-alert .alert-message {
+  white-space: pre-line;
+  text-align: left;
+  line-height: 1.55;
+}
+
 /* iOS 입력줌 방지: 16px 이상 보장 */
 input, select, textarea {
   font-size: max(16px, 1rem);

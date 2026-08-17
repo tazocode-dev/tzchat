@@ -37,8 +37,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
 
         // ✅ 스토어 업로드 핵심: 업로드할 때마다 versionCode는 1,2,3… 증가
-        versionCode 43
-        versionName "0.2.09"
+        versionCode 44
+        versionName "1.0.44"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

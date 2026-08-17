@@ -123,9 +123,9 @@ async function requestCode({ email: rawEmail, ip }, dependencies = {}) {
     try {
       await sendMailFn({
         to: email,
-        subject: 'TZChat 이메일 인증번호',
-        text: `TZChat 이메일 인증번호는 ${code}입니다. ${expiresMinutes}분 이내에 입력해주세요.`,
-        html: `<p>TZChat 이메일 인증번호는 <strong>${code}</strong>입니다.</p><p>${expiresMinutes}분 이내에 입력해주세요.</p>`,
+        subject: '손끝 이메일 인증번호',
+        text: `손끝 이메일 인증번호는 ${code}입니다. ${expiresMinutes}분 이내에 입력해주세요.`,
+        html: `<p>손끝 이메일 인증번호는 <strong>${code}</strong>입니다.</p><p>${expiresMinutes}분 이내에 입력해주세요.</p>`,
       });
     } catch (err) {
       console.error('[EMAIL_VERIFICATION][SEND_FAILED]', { message: err?.message });

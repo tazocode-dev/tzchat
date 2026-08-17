@@ -3,7 +3,7 @@
   <ion-page>
     <ion-header>
       <ion-toolbar>
-        <ion-title>TZChat 멤버십</ion-title>
+        <ion-title>손끝 멤버십</ion-title>
 
         <!-- 🔙 같은 줄 오른쪽 끝에 '뒤로가기' 버튼 -->
         <ion-buttons slot="end">

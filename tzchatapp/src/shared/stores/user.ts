@@ -60,13 +60,13 @@ const _meCache = {
   user: null as MeUser | null,
   credentialKey: '',
   result: null as AuthBootstrapResult | null,
-  inflight: null as Promise<AuthBootstrapResult> | null,
+  inflight: null as { credentialKey: string; promise: Promise<AuthBootstrapResult> } | null,
 }
 const ME_CACHE_TTL_MS = 30_000
 
 function currentCredentialKey(): string {
-  const { hasAccessToken, hasRefreshToken } = getStoredAuthState()
-  return `${hasAccessToken ? 1 : 0}:${hasRefreshToken ? 1 : 0}`
+  const { hasAccessToken, hasRefreshToken, credentialRevision = 0 } = getStoredAuthState()
+  return `${hasAccessToken ? 1 : 0}:${hasRefreshToken ? 1 : 0}:${credentialRevision}`
 }
 
 export const useUserStore = defineStore('user', {
@@ -146,15 +146,18 @@ export const useUserStore = defineStore('user', {
         return _meCache.result
       }
 
-      if (_meCache.inflight) {
-        return await _meCache.inflight
+      if (_meCache.inflight?.credentialKey === credentialKey) {
+        return await _meCache.inflight.promise
       }
 
-      _meCache.inflight = (async () => {
-        const startedWithCredentials = credentialKey !== '0:0'
+      const request = (async () => {
+        const [hasAccessToken, hasRefreshToken] = credentialKey.split(':')
+        const startedWithCredentials = hasAccessToken === '1' || hasRefreshToken === '1'
         let sessionReportedLoggedIn = false
+        const isCurrentCredential = () => currentCredentialKey() === credentialKey
 
         const commit = (result: AuthBootstrapResult): AuthBootstrapResult => {
+          if (!isCurrentCredential()) return result
           this.authStatus = result.status
           _meCache.result = result
           _meCache.user = result.user
@@ -165,8 +168,10 @@ export const useUserStore = defineStore('user', {
 
         try {
           if (!silent) {
-            this.loading = true
-            this.error = ''
+            if (isCurrentCredential()) {
+              this.loading = true
+              this.error = ''
+            }
           }
 
           if (!startedWithCredentials) {
@@ -179,7 +184,7 @@ export const useUserStore = defineStore('user', {
             )
             sessionReportedLoggedIn = info?.data?.loggedIn === true
             if (!sessionReportedLoggedIn) {
-              this.user = null
+              if (isCurrentCredential()) this.user = null
               return commit({ status: 'anonymous', user: null })
             }
           }
@@ -194,33 +199,39 @@ export const useUserStore = defineStore('user', {
           const u = extractUser(res?.data)
           if (!u?._id) throw new Error('NO_USER')
 
-          this.user = u
+          if (isCurrentCredential()) this.user = u
           return commit({ status: 'authenticated', user: u })
         } catch (e: any) {
           const status = e?.response?.status
           const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || 'AUTH_UNAVAILABLE'
 
           if (status === 401) {
-            this.error = msg
-            this.user = null
+            if (isCurrentCredential()) {
+              this.error = msg
+              this.user = null
+            }
             if (startedWithCredentials || sessionReportedLoggedIn) {
-              clearAuthToken()
+              if (isCurrentCredential()) clearAuthToken()
               return commit({ status: 'expired', user: null, error: msg })
             }
             return commit({ status: 'anonymous', user: null })
           }
 
-          this.error = msg
-          return commit({ status: 'unavailable', user: this.user ?? _meCache.user, error: msg })
+          if (isCurrentCredential()) this.error = msg
+          const currentUser = isCurrentCredential() ? this.user ?? _meCache.user : null
+          return commit({ status: 'unavailable', user: currentUser, error: msg })
         } finally {
-          if (!silent) this.loading = false
+          if (!silent && isCurrentCredential()) this.loading = false
         }
       })()
 
+      const inflight = { credentialKey, promise: request }
+      _meCache.inflight = inflight
+
       try {
-        return await _meCache.inflight
+        return await request
       } finally {
-        _meCache.inflight = null
+        if (_meCache.inflight === inflight) _meCache.inflight = null
       }
     },
 

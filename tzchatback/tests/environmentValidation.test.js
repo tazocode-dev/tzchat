@@ -56,7 +56,7 @@ function loadFrom(rootDir, nodeEnv, extraEnv = {}) {
     process.execPath,
     [
       '-e',
-      `const result = require(${JSON.stringify(path.join(ROOT, 'src/config/loadEnv'))}).loadEnv({ rootDir: process.argv[1] }); process.stdout.write(JSON.stringify({ loaded: result.loaded, marker: process.env.ENV_TEST_MARKER, precedence: process.env.ENV_TEST_PRECEDENCE }))`,
+      `const result = require(${JSON.stringify(path.join(ROOT, 'src/config/loadEnv'))}).loadEnv({ rootDir: process.argv[1] }); process.stdout.write(JSON.stringify({ loaded: result.loaded, marker: process.env.ENV_TEST_MARKER, precedence: process.env.ENV_TEST_PRECEDENCE, isolated: process.env.ENV_TEST_ISOLATED, commonOnly: process.env.ENV_TEST_COMMON_ONLY }))`,
       rootDir,
     ],
     { cwd: ROOT, env, encoding: 'utf8' },
@@ -73,32 +73,57 @@ test('NODE_ENV가 환경 파일보다 먼저 지정되어야 한다', () => {
   }
 })
 
-test('개발·운영은 공통 비밀 파일 뒤 환경별 파일을 읽고 외부 환경변수를 보존한다', () => {
+test('개발·운영·테스트는 선택된 환경 파일 하나만 읽고 서로 격리한다', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tzchat-env-'))
   try {
-    fs.writeFileSync(path.join(rootDir, '.env'), 'ENV_TEST_MARKER=common\nENV_TEST_PRECEDENCE=common\n')
-    fs.writeFileSync(path.join(rootDir, '.env.development'), 'ENV_TEST_MARKER=development\nENV_TEST_PRECEDENCE=development\n')
-    fs.writeFileSync(path.join(rootDir, '.env.production'), 'ENV_TEST_MARKER=production\nENV_TEST_PRECEDENCE=production\n')
+    fs.writeFileSync(path.join(rootDir, '.env'), 'ENV_TEST_MARKER=common\nENV_TEST_COMMON_ONLY=must-not-load\n')
+    fs.writeFileSync(path.join(rootDir, '.env.development'), 'ENV_TEST_MARKER=development\nENV_TEST_PRECEDENCE=development\nENV_TEST_ISOLATED=development-only\n')
+    fs.writeFileSync(path.join(rootDir, '.env.production'), 'ENV_TEST_MARKER=production\nENV_TEST_PRECEDENCE=production\nENV_TEST_ISOLATED=production-only\n')
+    fs.writeFileSync(path.join(rootDir, '.env.test'), 'ENV_TEST_MARKER=test\nENV_TEST_PRECEDENCE=test\nENV_TEST_ISOLATED=test-only\n')
 
     const development = loadFrom(rootDir, 'development')
     assert.equal(development.status, 0)
     assert.deepEqual(JSON.parse(development.stdout), {
-      loaded: ['.env', '.env.development'],
+      loaded: ['.env.development'],
       marker: 'development',
       precedence: 'development',
+      isolated: 'development-only',
     })
 
     const production = loadFrom(rootDir, 'production')
     assert.equal(production.status, 0)
     assert.deepEqual(JSON.parse(production.stdout), {
-      loaded: ['.env', '.env.production'],
+      loaded: ['.env.production'],
       marker: 'production',
       precedence: 'production',
+      isolated: 'production-only',
+    })
+
+    const automatedTest = loadFrom(rootDir, 'test')
+    assert.equal(automatedTest.status, 0)
+    assert.deepEqual(JSON.parse(automatedTest.stdout), {
+      loaded: ['.env.test'],
+      marker: 'test',
+      precedence: 'test',
+      isolated: 'test-only',
     })
 
     const external = loadFrom(rootDir, 'production', { ENV_TEST_PRECEDENCE: 'external' })
     assert.equal(external.status, 0)
     assert.equal(JSON.parse(external.stdout).precedence, 'external')
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true })
+  }
+})
+
+test('선택된 환경 파일이 없으면 공통 파일이나 다른 환경 파일로 대체하지 않는다', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tzchat-env-'))
+  try {
+    fs.writeFileSync(path.join(rootDir, '.env'), 'ENV_TEST_MARKER=common\n')
+    fs.writeFileSync(path.join(rootDir, '.env.production'), 'ENV_TEST_MARKER=production\n')
+    const result = loadFrom(rootDir, 'development')
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /필수 환경 파일이 없습니다: \.env\.development/)
   } finally {
     fs.rmSync(rootDir, { recursive: true, force: true })
   }

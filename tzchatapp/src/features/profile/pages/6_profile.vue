@@ -90,8 +90,8 @@
             <tr
               :class="['editable-row', { disabled: !canEditFieldLocal('preference') }]"
               tabindex="0"
-              @click="canEditFieldLocal('preference') ? openPopup(2, user.preference) : lock('특징')"
-              @keydown.enter="canEditFieldLocal('preference') ? openPopup(2, user.preference) : null"
+              @click="canEditFieldLocal('preference') ? openPreferenceModal() : lock('특징')"
+              @keydown.enter="canEditFieldLocal('preference') ? openPreferenceModal() : null"
             >
               <td class="pf-th">
                 <IonIcon :icon="icons.sparklesOutline" class="row-icon" />
@@ -103,7 +103,7 @@
                   class="pf-hint"
                   title="일반/라이트회원은 '이성친구' 계열만 선택 가능"
                 ></span>
-                {{ user.preference }}
+                {{ user.preference || '미입력' }}
               </td>
             </tr>
 
@@ -279,7 +279,7 @@
               </td>
               <td class="pf-td editable-text">
                 <span v-if="!canEditFieldLocal('search_preference')" class="pf-lock">🔒</span>
-                {{ user.search_preference }}
+                {{ user.search_preference || '미입력' }}
               </td>
             </tr>
 
@@ -378,6 +378,15 @@ import { useRouter } from 'vue-router'
 import { Capacitor } from '@capacitor/core'
 import { setNotificationsOptOut } from '@/shared/services/webPush'
 import { getNativeContactPhoneNumbers } from '@/shared/services/nativeContacts'
+import {
+  CONTACTS_CONSENT_SLUG,
+  ensureCurrentContactConsent,
+  isOptionalConsentRequiredError,
+} from '@/features/profile/services/contactConsent'
+import {
+  SENSITIVE_INFORMATION_CONSENT_SLUG,
+  ensureCurrentSensitivePreferenceConsent,
+} from '@/features/profile/services/sensitivePreferenceConsent'
 
 /**
  * ✅ 핵심 개선
@@ -462,7 +471,64 @@ async function handleLevelUpdated(val){
 
 function openSearchYearModal(){ showSearchYear.value = true }
 function openSearchRegionModal(){ showSearchRegion.value = true }
-function openSearchPreferenceModal(){ showSearchPreference.value = true }
+const sensitiveConsentBusy = ref(false)
+
+async function presentSensitivePreferenceConsentPrompt(){
+  const alert = await alertController.create({
+    header: '민감정보 선택 동의',
+    message:
+      '【목적】\n프로필 표시와 회원이 설정한 조건에 따른 검색·추천에 사용합니다.\n\n' +
+      '【처리 항목】\n프로필의 이성/동성·일반/특수 성향과 상대 검색 성향 정보를 처리합니다.\n\n' +
+      '【거부 영향】\n선택 동의이므로 거부해도 기본 서비스를 이용할 수 있지만 해당 성향 기반 프로필 표시·검색·추천 기능은 제한됩니다.',
+    cssClass: 'tz-alert',
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      { text: '자세히 보기', role: 'details' },
+      { text: '동의하고 설정', role: 'accept' },
+    ],
+  })
+  await alert.present()
+  const { role } = await alert.onDidDismiss()
+  if (role === 'accept' || role === 'details') return role
+  return 'cancel'
+}
+
+async function ensureSensitivePreferenceConsentForUse(){
+  try {
+    return await ensureCurrentSensitivePreferenceConsent({
+      client: axios,
+      prompt: presentSensitivePreferenceConsentPrompt,
+      openDetails: () => router.push({
+        name: 'LegalPageV2Internal',
+        params: { slug: SENSITIVE_INFORMATION_CONSENT_SLUG },
+        query: { return: '/home/6page' },
+      }),
+    })
+  } catch (err) {
+    console.error('민감정보 선택 동의 확인 실패:', err)
+    ;(await toastController.create({
+      message: '민감정보 선택 동의 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      duration: 2400,
+      color: 'danger',
+    })).present()
+    return false
+  }
+}
+
+async function openSensitivePreferenceEditor(target){
+  if (sensitiveConsentBusy.value) return
+  sensitiveConsentBusy.value = true
+  try {
+    if (!(await ensureSensitivePreferenceConsentForUse())) return
+    if (target === 'profile') openPopup(2, user.value?.preference || '')
+    else showSearchPreference.value = true
+  } finally {
+    sensitiveConsentBusy.value = false
+  }
+}
+
+function openPreferenceModal(){ return openSensitivePreferenceEditor('profile') }
+function openSearchPreferenceModal(){ return openSensitivePreferenceEditor('search') }
 
 const showPasswordModal = ref(false)
 function openPasswordModal() { showPasswordModal.value = true }
@@ -579,18 +645,14 @@ async function onSearchRegionUpdated(payload){
   } finally { showSearchRegion.value = false }
 }
 
-/* 검색특징 저장 */
+/* 검색특징 반영(저장은 모달에서 1회 수행) */
 async function onSearchPreferenceUpdated(payload){
   const can = canEditFieldLocal('search_preference')
   if (!can) { lock('검색특징', '일반/라이트회원은 "전체"만 사용 가능'); showSearchPreference.value = false; return }
   const preference = typeof payload === 'string' ? payload : payload?.preference ?? ''
   if (user.value) user.value.search_preference = preference
-  try {
-    await axios.patch('/api/search/preference', { preference }, { withCredentials: true })
-    const t = await toastController.create({ message: '검색 특징이 적용되었습니다.', duration: 1500, color: 'success' }); await t.present()
-  } catch (err) {
-    const t = await toastController.create({ message: '저장 실패: ' + (err?.response?.data?.error || err.message), duration: 2000, color: 'danger' }); await t.present()
-  } finally { showSearchPreference.value = false }
+  const t = await toastController.create({ message: '검색 특징이 적용되었습니다.', duration: 1500, color: 'success' }); await t.present()
+  showSearchPreference.value = false
 }
 
 /* 결혼(본인) */
@@ -663,6 +725,7 @@ async function handleIntroUpdate(payload){
 
 /* 스위치들 */
 const disconnectLocalContacts = ref(false)
+const contactToggleBusy = ref(false)
 const allowFriendRequests    = ref(false)
 const allowNotifications     = ref(false)
 const onlyWithPhoto          = ref(false)
@@ -680,7 +743,7 @@ function saveSwitchesDebounced(delay = 250) {
   }, delay)
 }
 
-async function saveSwitchesToDB() {
+async function saveSwitchesToDB({ showError = true } = {}) {
   if (!user.value) return
   user.value.search_disconnectLocalContacts = boolToOnOff(disconnectLocalContacts.value)
   user.value.search_allowFriendRequests    = boolToOnOff(!allowFriendRequests.value)
@@ -698,52 +761,120 @@ async function saveSwitchesToDB() {
     await axios.patch('/api/search/settings', payload, { withCredentials: true })
   } catch (err) {
     console.error('설정 저장 실패:', err)
-    ;(await toastController.create({ message: '설정 저장에 실패했습니다.', duration: 1600, color: 'danger' })).present()
+    if (showError) {
+      ;(await toastController.create({ message: '설정 저장에 실패했습니다.', duration: 1600, color: 'danger' })).present()
+    }
     throw err
   }
 }
 
+async function presentContactConsentPrompt(){
+  const alert = await alertController.create({
+    header: '연락처 지인 제외 선택 동의',
+    message:
+      '【목적】\n휴대폰 연락처와 일치하는 회원을 추천·검색에서 서로 제외합니다.\n\n' +
+      '【처리 항목】\n연락처 전화번호를 기기에서 SHA-256 방식으로 변환한 해시값만 서버에 저장하며, 이름·주소·메모는 전송하지 않습니다.\n\n' +
+      '【거부 영향】\n선택 동의이므로 거부해도 기본 서비스를 이용할 수 있지만 연락처 지인 제외 기능은 사용할 수 없습니다.',
+    cssClass: 'tz-alert',
+    buttons: [
+      { text: '취소', role: 'cancel' },
+      { text: '자세히 보기', role: 'details' },
+      { text: '동의하고 사용', role: 'accept' },
+    ],
+  })
+  await alert.present()
+  const { role } = await alert.onDidDismiss()
+  if (role === 'accept' || role === 'details') return role
+  return 'cancel'
+}
+
+async function ensureContactsConsentForUse(){
+  try {
+    return await ensureCurrentContactConsent({
+      client: axios,
+      prompt: presentContactConsentPrompt,
+      openDetails: () => router.push({
+        name: 'LegalPageV2Internal',
+        params: { slug: CONTACTS_CONSENT_SLUG },
+        query: { return: '/home/6page' },
+      }),
+    })
+  } catch (err) {
+    console.error('연락처 선택 동의 확인 실패:', err)
+    ;(await toastController.create({
+      message: '연락처 지인 제외 동의 상태를 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      duration: 2400,
+      color: 'danger',
+    })).present()
+    return false
+  }
+}
+
+function rollbackDisconnectLocalContacts(){
+  disconnectLocalContacts.value = false
+  if (user.value) user.value.search_disconnectLocalContacts = 'OFF'
+}
+
+async function showContactConsentRequired(){
+  ;(await toastController.create({
+    message: '연락처 지인 제외를 사용하려면 현재 버전의 선택 동의가 필요합니다. 다시 켜서 동의해 주세요.',
+    duration: 2800,
+    color: 'warning',
+  })).present()
+}
+
 /* 연락처/토글 로직 */
 async function toggleDisconnectLocalContacts(){
+  if (contactToggleBusy.value) return
   const platform = Capacitor.getPlatform ? Capacitor.getPlatform() : 'web'
   const nextState = !disconnectLocalContacts.value
 
-  // ✅ 1) 웹: 연락처/폰은 건드리지 않고, 스위치 + DB만 업데이트 (디바운스 저장)
-  if (platform === 'web') {
-    disconnectLocalContacts.value = nextState
+  contactToggleBusy.value = true
+  try {
+    if (nextState && !(await ensureContactsConsentForUse())) return
 
-    try {
-      // 즉시 저장 대신 디바운스
-      saveSwitchesDebounced(200)
+    // ✅ 1) 웹: 연락처/폰은 건드리지 않고, 동의 확인 후 스위치 + DB만 업데이트
+    if (platform === 'web') {
+      disconnectLocalContacts.value = nextState
 
-      if (nextState) {
-        const msg =
-          '웹에서는 휴대폰 연락처를 불러올 수 없습니다.\n' +
-          '이미 앱에서 저장된 전화번호/연락처 기준으로만 필터가 적용됩니다.'
-        ;(await toastController.create({
-          message: msg,
-          duration: 2600,
-          color: 'medium'
-        })).present()
-      } else {
-        ;(await toastController.create({
-          message: '휴대폰 연락처 기반 필터가 해제되었습니다.',
-          duration: 1800,
-          color: 'medium'
-        })).present()
+      try {
+        await saveSwitchesToDB({ showError: false })
+
+        if (nextState) {
+          const msg =
+            '웹에서는 휴대폰 연락처를 불러올 수 없습니다.\n' +
+            '이미 앱에서 저장된 전화번호/연락처 기준으로만 필터가 적용됩니다.'
+          ;(await toastController.create({
+            message: msg,
+            duration: 2600,
+            color: 'medium'
+          })).present()
+        } else {
+          ;(await toastController.create({
+            message: '휴대폰 연락처 기반 필터가 해제되었습니다.',
+            duration: 1800,
+            color: 'medium'
+          })).present()
+        }
+      } catch (err) {
+        console.error('웹 스위치 저장 실패:', err)
+        if (nextState) rollbackDisconnectLocalContacts()
+        else {
+          disconnectLocalContacts.value = true
+          if (user.value) user.value.search_disconnectLocalContacts = 'ON'
+        }
+        if (isOptionalConsentRequiredError(err)) await showContactConsentRequired()
+        else {
+          ;(await toastController.create({
+            message: '설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+            duration: 2000,
+            color: 'danger'
+          })).present()
+        }
       }
-    } catch (err) {
-      console.error('웹 스위치 저장 실패:', err)
-      disconnectLocalContacts.value = !nextState
-      ;(await toastController.create({
-        message: '설정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.',
-        duration: 2000,
-        color: 'danger'
-      })).present()
-    }
 
-    return
-  }
+      return
+    }
 
   // ✅ 2) 앱(안드로이드/iOS): 연락처 해시 업로드/삭제 + 스위치/DB 동기화
   if (nextState) {
@@ -757,7 +888,7 @@ async function toggleDisconnectLocalContacts(){
       disconnectLocalContacts.value = true
 
       // 업로드 성공 후 저장은 즉시(정합성 중요)
-      await saveSwitchesToDB()
+      await saveSwitchesToDB({ showError: false })
 
       ;(await toastController.create({
         message: `연락처 ${hashes.length}건이 저장되었습니다.`,
@@ -776,7 +907,9 @@ async function toggleDisconnectLocalContacts(){
 
       let msg = '연락처 저장에 실패했습니다.'
 
-      if (/not implemented on web/i.test(raw)) {
+      if (isOptionalConsentRequiredError(err)) {
+        msg = '연락처 지인 제외를 사용하려면 현재 버전의 선택 동의가 필요합니다. 다시 켜서 동의해 주세요.'
+      } else if (/not implemented on web/i.test(raw)) {
         msg = '이 기능은 앱(안드로이드/iOS)에서만 사용할 수 있습니다.'
       } else if (/(READ_CONTACTS|WRITE_CONTACTS|연락처 권한)/i.test(raw)) {
         msg = '연락처 권한이 부족합니다. 앱 설정에서 연락처 권한을 허용해 주세요.'
@@ -796,7 +929,7 @@ async function toggleDisconnectLocalContacts(){
         color: 'danger'
       })).present()
 
-      disconnectLocalContacts.value = false
+      rollbackDisconnectLocalContacts()
     }
   } else {
     // ON → OFF : 서버에 저장된 연락처 해시 삭제 + 필터 해제
@@ -806,7 +939,7 @@ async function toggleDisconnectLocalContacts(){
     try {
       await axios.delete('/api/contacts/hashes', { withCredentials: true })
       disconnectLocalContacts.value = false
-      await saveSwitchesToDB()
+      await saveSwitchesToDB({ showError: false })
       ;(await toastController.create({
         message: '저장된 연락처가 삭제되었습니다.',
         duration: 1400,
@@ -821,6 +954,9 @@ async function toggleDisconnectLocalContacts(){
       })).present()
       disconnectLocalContacts.value = true
     }
+  }
+  } finally {
+    contactToggleBusy.value = false
   }
 }
 

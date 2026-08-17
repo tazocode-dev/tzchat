@@ -18,6 +18,9 @@ class ImageWriteError extends Error {
   }
 }
 
+const MAX_PROFILE_IMAGES = 2;
+const PROFILE_IMAGE_LIMIT_MESSAGE = '현재 프로필 사진은 최대 2장까지 등록할 수 있습니다.';
+
 // ===== 경로/ID 유틸 =====
 const UPLOAD_ROOT =
   process.env.UPLOAD_ROOT
@@ -102,77 +105,122 @@ async function createVariantsAndSave(srcPath, outBasePathNoExt, aspect) {
   return results; // { thumb, medium, full }
 }
 
-// [1] 이미지 업로드 (다중)
-async function uploadImages({ myId, kind: kindInput, files, req }) {
-  if (!myId) throw new ImageWriteError(401, '로그인이 필요합니다.');
+function removeFileQuietly(filePath) {
+  if (!filePath) return;
+  try { fs.unlinkSync(filePath); } catch {}
+}
 
-  const me = await User.findById(myId, { profileImages: 1, profileMain: 1 }).lean();
-  if (!me) throw new ImageWriteError(404, '사용자를 찾을 수 없습니다.');
+function removeUploadedTempFiles(files) {
+  for (const file of files || []) removeFileQuietly(file?.path);
+}
+
+function variantPaths(outBasePathNoExt) {
+  return SIZES.map(size => `${outBasePathNoExt}_${size.name}.jpg`);
+}
+
+// [1] 이미지 업로드 (다중)
+async function uploadImages({ myId, kind: kindInput, files, req }, dependencies = {}) {
+  const fileList = Array.isArray(files) ? files : [];
+  if (!myId) {
+    removeUploadedTempFiles(fileList);
+    throw new ImageWriteError(401, '로그인이 필요합니다.');
+  }
+
+  const UserModel = dependencies.UserModel || User;
+  const makeVariants = dependencies.createVariantsAndSave || createVariantsAndSave;
+  const me = await UserModel.findById(myId, { profileImages: 1, profileMain: 1 }).lean();
+  if (!me) {
+    removeUploadedTempFiles(fileList);
+    throw new ImageWriteError(404, '사용자를 찾을 수 없습니다.');
+  }
+
+  if (!fileList.length) throw new ImageWriteError(400, '업로드된 파일이 없습니다.');
+
+  const existingCount = Array.isArray(me.profileImages) ? me.profileImages.length : 0;
+  if (existingCount + fileList.length > MAX_PROFILE_IMAGES) {
+    removeUploadedTempFiles(fileList);
+    throw new ImageWriteError(400, PROFILE_IMAGE_LIMIT_MESSAGE);
+  }
 
   const kind = (kindInput === 'avatar' || kindInput === 'gallery') ? kindInput : 'gallery';
   const aspect = kind === 'avatar' ? 1.0 : 0.8; // 1:1 or 4:5
   const userDir = getUserProfileDir(myId);
 
-  if (!files || !files.length) throw new ImageWriteError(400, '업로드된 파일이 없습니다.');
-
   const toInsert = [];
   const created = [];
+  const generatedPaths = [];
 
-  for (const file of files) {
-    const uid = genId();
-    const baseNoExt = path.join(userDir, uid);
+  try {
+    for (const file of fileList) {
+      const uid = genId();
+      const baseNoExt = path.join(userDir, uid);
+      generatedPaths.push(...variantPaths(baseNoExt));
 
-    // 3종 생성
-    const variants = await createVariantsAndSave(file.path, baseNoExt, aspect);
+      // 3종 생성
+      const variants = await makeVariants(file.path, baseNoExt, aspect);
 
-    // 원본 임시파일 삭제
-    try { fs.unlinkSync(file.path); } catch {}
+      // 원본 임시파일 삭제
+      removeFileQuietly(file.path);
 
-    const urls = {
-      thumb:  toPublicUrl(variants.thumb),
-      medium: toPublicUrl(variants.medium),
-      full:   toPublicUrl(variants.full),
+      const urls = {
+        thumb:  toPublicUrl(variants.thumb),
+        medium: toPublicUrl(variants.medium),
+        full:   toPublicUrl(variants.full),
+      };
+
+      const doc = {
+        id: uid,
+        kind,
+        aspect,
+        urls,
+        createdAt: new Date(),
+      };
+
+      toInsert.push(doc);
+
+      created.push({
+        id: uid,
+        kind,
+        aspect,
+        urlsAbs: {
+          thumb:  toAbsoluteUploadUrl(urls.thumb,  req),
+          medium: toAbsoluteUploadUrl(urls.medium, req),
+          full:   toAbsoluteUploadUrl(urls.full,   req),
+        }
+      });
+    }
+
+    // 대표사진 자동 설정: 기존 대표가 없고 avatar를 올리면 첫 업로드를 대표로
+    const shouldSetMain = (!me.profileMain && kind === 'avatar' && toInsert.length > 0);
+    const setOps = shouldSetMain ? { profileMain: toInsert[0].id } : {};
+    const firstForbiddenIndex = MAX_PROFILE_IMAGES - toInsert.length;
+
+    const updateResult = await UserModel.updateOne(
+      {
+        _id: myId,
+        [`profileImages.${firstForbiddenIndex}`]: { $exists: false },
+      },
+      {
+        $push: { profileImages: { $each: toInsert } },
+        ...(Object.keys(setOps).length ? { $set: setOps } : {})
+      },
+      { runValidators: false }
+    );
+
+    const matchedCount = updateResult?.matchedCount ?? updateResult?.n ?? 0;
+    if (matchedCount < 1) {
+      throw new ImageWriteError(409, PROFILE_IMAGE_LIMIT_MESSAGE);
+    }
+
+    return {
+      created,
+      ...(shouldSetMain ? { profileMain: toInsert[0].id } : {})
     };
-
-    const doc = {
-      id: uid,
-      kind,
-      aspect,
-      urls,
-      createdAt: new Date(),
-    };
-
-    toInsert.push(doc);
-
-    created.push({
-      id: uid,
-      kind,
-      aspect,
-      urlsAbs: {
-        thumb:  toAbsoluteUploadUrl(urls.thumb,  req),
-        medium: toAbsoluteUploadUrl(urls.medium, req),
-        full:   toAbsoluteUploadUrl(urls.full,   req),
-      }
-    });
+  } catch (error) {
+    removeUploadedTempFiles(fileList);
+    for (const generatedPath of generatedPaths) removeFileQuietly(generatedPath);
+    throw error;
   }
-
-  // 대표사진 자동 설정: 기존 대표가 없고 avatar를 올리면 첫 업로드를 대표로
-  const shouldSetMain = (!me.profileMain && kind === 'avatar' && toInsert.length > 0);
-  const setOps = shouldSetMain ? { profileMain: toInsert[0].id } : {};
-
-  await User.updateOne(
-    { _id: myId },
-    {
-      $push: { profileImages: { $each: toInsert } },
-      ...(Object.keys(setOps).length ? { $set: setOps } : {})
-    },
-    { runValidators: false }
-  );
-
-  return {
-    created,
-    ...(shouldSetMain ? { profileMain: toInsert[0].id } : {})
-  };
 }
 
 // [2] 이미지 삭제
@@ -217,6 +265,8 @@ async function deleteImage({ myId, imageId }) {
 
 module.exports = {
   ImageWriteError,
+  MAX_PROFILE_IMAGES,
+  PROFILE_IMAGE_LIMIT_MESSAGE,
   UPLOAD_ROOT,
   PROFILE_ROOT,
   ensureDirSync,

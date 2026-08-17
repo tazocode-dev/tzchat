@@ -27,7 +27,7 @@
       <tr><td>서비스 이용약관</td><td>필수</td><td><code>terms</code>는 코드에서 항상 필수</td></tr>
       <tr><td>개인정보 처리방침</td><td>상시 공개</td><td>방침 자체와 수집·이용 동의를 구분</td></tr>
       <tr><td>개인정보 수집·이용 동의</td><td>가입 필수 또는 계약 이행 근거를 명확히 선택</td><td><code>privacy-consent</code> 활성본과 필수값 확정</td></tr>
-      <tr><td>민감정보 처리 동의</td><td>별도 동의</td><td>새 슬러그와 UI 추가 필요. 매칭 선호 입력 전에 동의</td></tr>
+      <tr><td>민감정보 처리 동의</td><td>선택·별도 동의</td><td><code>sensitive-information-consent</code> 슬러그와 선택 동의 UI·메타데이터는 있음. <code>preference</code>·<code>search_preference</code> 입력 전 동의 강제 연결은 출시 전 확인</td></tr>
       <tr><td>커뮤니티·청소년 정책</td><td>약관에 편입하거나 필수 확인</td><td><code>guidelines</code>, <code>youth-policy</code>는 코드에서 항상 필수</td></tr>
       <tr><td>제3자 제공</td><td>현재 상시 제공 없음. 별도 동의 불필요</td><td>기존 <code>sharing-consent</code>를 필수로 활성화하지 않음</td></tr>
       <tr><td>국외 이전</td><td>FCM·Analytics 목적별 근거와 선택권 분리</td><td>기존 <code>xborder-consent</code>의 필수값 제거 여부와 Analytics 동의 전 비활성화 확인</td></tr>
@@ -67,6 +67,7 @@
 
   <h2>7. 출시 확인</h2>
   <ul>
+    <li>앱이 유지 중인 공개 링크 <code>privacy.html#sensitive</code>의 <code>sensitive</code> 앵커가 현재 GitHub Pages 공개 문서에 누락되어 있습니다. 외부 공개 저장소에 현재 민감정보 범위를 반영하고 해당 앵커를 배포한 뒤 링크 동작을 확인합니다.</li>
     <li>웹·Android·iOS 모든 가입 화면에서 필수와 선택을 분리하고 선택 미동의 가입을 테스트합니다.</li>
     <li>각 내용보기 링크, 버전 저장, 동의·철회 시각, 재동의 조건과 이전 버전 열람을 테스트합니다.</li>
     <li>Google Play Data safety, Apple App Privacy, 개인정보 처리방침과 실제 네트워크 트래픽의 항목이 일치하는지 확인합니다.</li>

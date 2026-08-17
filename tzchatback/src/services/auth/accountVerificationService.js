@@ -120,9 +120,9 @@ async function sendEmailChallenge({ userId, purpose, destination, ip }, dependen
       const mailFn = dependencies.sendMailFn || sendMail;
       await mailFn({
         to: destination,
-        subject: 'TZChat 계정정보 변경 인증번호',
-        text: `TZChat 인증번호는 ${plainCode}입니다. ${EXPIRES_MINUTES}분 이내에 입력해주세요.`,
-        html: `<p>TZChat 인증번호는 <strong>${plainCode}</strong>입니다.</p><p>${EXPIRES_MINUTES}분 이내에 입력해주세요.</p>`,
+        subject: '손끝 계정정보 변경 인증번호',
+        text: `손끝 인증번호는 ${plainCode}입니다. ${EXPIRES_MINUTES}분 이내에 입력해주세요.`,
+        html: `<p>손끝 인증번호는 <strong>${plainCode}</strong>입니다.</p><p>${EXPIRES_MINUTES}분 이내에 입력해주세요.</p>`,
       });
     },
   });

@@ -35,7 +35,7 @@ export const LEGAL_ITEMS: LegalItem[] = [
   { slug: 'youth-policy', label: '아동 안전 기준', kind: 'page', summary: '19세 이상 정책과 아동 보호 기준', file: 'child-safety.html' },
   { slug: 'privacy', label: '개인정보 처리방침', kind: 'page', summary: '처리 항목, 목적, 보관기간과 이용자 권리', file: 'privacy.html' },
   { slug: 'privacy-consent', label: '개인정보 수집·이용 안내/동의', kind: 'consent', defaultRequired: true, summary: '가입과 기본 서비스에 필요한 개인정보 처리', file: 'privacy.html', anchor: 'purpose' },
-  { slug: 'sensitive-information-consent', label: '민감정보 선택 동의', kind: 'consent', defaultRequired: false, summary: '프로필과 매칭에 이용되는 정보', file: 'privacy.html', anchor: 'sensitive' },
+  { slug: 'sensitive-information-consent', label: '민감정보 선택 동의', kind: 'consent', defaultRequired: false, summary: '프로필의 이성/동성·일반/특수 성향과 상대 검색 성향 정보 처리', file: 'privacy.html', anchor: 'sensitive' },
   { slug: 'data-retention', label: '계정 및 데이터 삭제 안내', kind: 'page', summary: '삭제 신청, 14일 유예와 삭제 범위', file: 'account-deletion.html' },
   { slug: 'contacts-consent', label: '연락처 지인 제외 선택 안내', kind: 'consent', defaultRequired: false, summary: '연락처 전화번호 해시 처리와 철회 방법', file: 'privacy.html', anchor: 'contacts' },
   { slug: 'cookies', label: '알림·쿠키·SDK 안내', kind: 'page', summary: '로그인 저장기술, 푸시 알림과 앱 SDK', file: 'privacy.html', anchor: 'automatic' },

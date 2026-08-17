@@ -29,6 +29,14 @@ function createRequireCompletedOnboarding(dependencies = {}) {
         onboarding: buildStatus(req.user),
       });
     } catch (error) {
+      if (error?.code === 'TERMS_CONFIGURATION_ERROR') {
+        return res.status(503).json({
+          ok: false,
+          code: error.code,
+          message: error.message,
+          missingRequiredSlugs: error.details?.missingRequiredSlugs || [],
+        });
+      }
       return next(error);
     }
   };

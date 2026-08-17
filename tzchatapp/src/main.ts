@@ -17,8 +17,6 @@ import { connectSocket, disconnectSocket, getSocket } from '@/shared/services/so
 // ✅ 사용자 스토어(인증 상태·소켓 바인딩용)
 import { useUserStore, type AuthBootstrapResult } from '@/shared/stores/user'
 
-// ✅ (추가) 안드로이드 권한 유틸
-import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 
 // ✅ 구글플레이 업데이트 유도(스토어 열기)
@@ -194,36 +192,7 @@ router.isReady()
       })
     } catch {}
 
-    // ✅ 5) 안드로이드 하드웨어 뒤로가기 처리
-    try {
-      if (Capacitor.getPlatform() === 'android') {
-        CapApp.addListener('backButton', ({ canGoBack }) => {
-          const current = router.currentRoute.value
-          const path = current.path || ''
-          const name = (current.name as string | undefined) || ''
-
-          const isMainLike =
-            path === '/' ||
-            path === '/home' ||
-            path === '/home/' ||
-            name === 'Home' ||
-            name === 'MainPage'
-
-          if (isMainLike) {
-            CapApp.exitApp()
-            return
-          }
-
-          if (canGoBack && router.options.history.state.back !== null) {
-            router.back()
-          } else {
-            CapApp.exitApp()
-          }
-        })
-      }
-    } catch {}
-
-    // ✅ 6) 라우터와 공유한 인증 결과로 소켓·푸시를 백그라운드 초기화
+    // ✅ 5) 라우터와 공유한 인증 결과로 소켓·푸시를 백그라운드 초기화
     runInBackground(() => {
       startAuthenticatedServices().catch(() => {})
     }, 0)

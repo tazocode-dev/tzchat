@@ -52,6 +52,7 @@
 import { ref, onMounted, watch } from 'vue'
 import axios from '@/shared/services/api'
 import { IonButton, IonSelect, IonSelectOption } from '@ionic/vue'
+import { isSensitiveInformationConsentRequiredError } from '@/features/profile/services/sensitivePreferenceConsent'
 
 /* 현재 저장값 */
 const props = defineProps({
@@ -140,7 +141,12 @@ const submit = async () => {
     }
   } catch (err) {
     console.warn('❌ 서버 요청 실패:', err)
-    errorMsg.value = '서버 오류가 발생했습니다.'
+    if (isSensitiveInformationConsentRequiredError(err)) {
+      preference.value = props.message || ''
+      errorMsg.value = '현재 버전의 민감정보 선택 동의가 필요합니다. 닫기 후 다시 설정해 주세요.'
+      return
+    }
+    errorMsg.value = err?.response?.data?.message || '서버 오류가 발생했습니다.'
   }
 }
 </script>

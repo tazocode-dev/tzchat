@@ -21,7 +21,12 @@ const {
 
 function handleError(err, req, res, fallbackMessage) {
   if (err instanceof TermsPublicError) {
-    return res.status(err.status).json({ ok: false, message: err.message });
+    return res.status(err.status).json({
+      ok: false,
+      ...(err.code ? { code: err.code } : {}),
+      ...err.details,
+      message: err.message,
+    });
   }
   console.error(`[TERMS]${logPath(req)} error:`, err);
   return res.status(500).json({ ok: false, message: fallbackMessage });
@@ -90,7 +95,7 @@ async function agreementsAccept(req, res) {
   try {
     const userId = getUserIdFromReq(req);
     const body = req.body || {};
-    const slugsSelected = Array.isArray(body.slugs) ? body.slugs.map(String) : null;
+    const slugsSelected = body.slugs;
 
     console.log(`[TERMS][POST]${route} payload:`, {
       type: typeof body.slugs,

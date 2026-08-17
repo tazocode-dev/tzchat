@@ -232,6 +232,32 @@ test('메인 API 게이트는 약관 완료 후 프로필 온보딩 미완료 �
   assert.equal(response.body.onboarding.nextStep, 'birthDate')
 })
 
+test('메인 API 게이트는 필수 약관 설정 누락을 완료로 오인하지 않고 503으로 차단한다', async () => {
+  let response = null
+  const error = Object.assign(new Error('필수 약관 메타데이터가 설정되지 않았습니다: terms'), {
+    code: 'TERMS_CONFIGURATION_ERROR',
+    details: { missingRequiredSlugs: ['terms'] },
+  })
+  const middleware = createRequireCompletedOnboarding({
+    getRequireConsent: async () => { throw error },
+  })
+  const res = {
+    status(status) {
+      return { json(body) { response = { status, body }; return response } }
+    },
+  }
+
+  await middleware(
+    { user: { _id: 'user-1', role: 'user', birthyear: 2000, gender: 'woman' } },
+    res,
+    () => assert.fail('설정 오류 상태에서 메인 API를 통과시키면 안 됩니다.'),
+  )
+
+  assert.equal(response.status, 503)
+  assert.equal(response.body.code, 'TERMS_CONFIGURATION_ERROR')
+  assert.deepEqual(response.body.missingRequiredSlugs, ['terms'])
+})
+
 test('메인 API 게이트는 필수 약관·온보딩 완료 계정과 master를 통과시킨다', async () => {
   let nextCalls = 0
   const next = () => { nextCalls += 1 }
