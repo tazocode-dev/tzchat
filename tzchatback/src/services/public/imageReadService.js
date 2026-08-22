@@ -5,6 +5,7 @@
 
 const { User } = require('@/models');
 const { getPublicBaseUrl, toAbsoluteMediaUrl } = require('@/utils/mediaUrl');
+const { areUsersBlocked } = require('@/services/chat/blockPolicyService');
 
 class ImageReadError extends Error {
   constructor(status, message) {
@@ -40,7 +41,11 @@ async function getMyImages(myId, req) {
 }
 
 // [2] 상대방 프로필 이미지 목록 조회
-async function getUserImages(userId, req) {
+async function getUserImages(userId, req, requesterId = null) {
+  const viewerId = requesterId || userId;
+  if (String(viewerId) !== String(userId) && await areUsersBlocked(viewerId, userId)) {
+    throw new ImageReadError(404, '사용자를 찾을 수 없습니다.');
+  }
   const user = await User.findById(userId, { profileImages: 1, profileMain: 1 }).lean();
   if (!user) throw new ImageReadError(404, '사용자를 찾을 수 없습니다.');
 

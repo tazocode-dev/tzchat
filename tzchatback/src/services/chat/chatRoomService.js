@@ -6,6 +6,7 @@
 const mongoose = require('mongoose');
 const { ChatRoom, Message } = require('@/models');
 const { toAbsoluteMediaUrl, normalizeUserPhotos } = require('@/utils/mediaUrl');
+const { normalizeUserId, areUsersBlocked, getBlockedUserIdSet } = require('@/services/chat/blockPolicyService');
 
 class ChatRoomError extends Error {
   constructor(status, message) {
@@ -14,7 +15,28 @@ class ChatRoomError extends Error {
   }
 }
 
-const PARTICIPANT_FIELDS = 'nickname gender profilePhotoUrl photoUrl profile.mainUrl photos.url photos.isMain';
+const PARTICIPANT_FIELDS =
+  'nickname gender profilePhotoUrl photoUrl profile.mainUrl photos.url photos.isMain suspended status isDeleted';
+
+function participantId(participant) {
+  return String(participant?._id || participant || '');
+}
+
+function otherParticipant(room, myId) {
+  return (room?.participants || []).find(participant => participantId(participant) !== String(myId)) || null;
+}
+
+function isUnavailableParticipant(participant) {
+  return participant?.suspended === true || participant?.isDeleted === true ||
+    ['pendingDeletion', 'deleted'].includes(String(participant?.status || ''));
+}
+
+function filterAllowedRooms(rooms, myId, blockedUserIds) {
+  return (rooms || []).filter(room => {
+    const partner = otherParticipant(room, myId);
+    return partner && !blockedUserIds.has(participantId(partner)) && !isUnavailableParticipant(partner);
+  });
+}
 
 function getHiddenAt(room, userId) {
   const entry = (room?.hiddenFor || []).find(item => String(item?.user) === String(userId));
@@ -38,11 +60,13 @@ function buildVisibleMessagesFilter(rooms, userId) {
  * =========================================== */
 async function listMyChatRooms(myId, req) {
   const myObjId = new mongoose.Types.ObjectId(String(myId));
-  const rooms = await ChatRoom.find({ participants: myObjId })
+  const blockedUserIds = await getBlockedUserIdSet(myId);
+  const foundRooms = await ChatRoom.find({ participants: myObjId })
     .select('_id participants lastMessage hiddenFor updatedAt createdAt')
     .populate('participants', PARTICIPANT_FIELDS)
     .sort({ updatedAt: -1 })
     .lean();
+  const rooms = filterAllowedRooms(foundRooms, myId, blockedUserIds);
 
   const roomIds = rooms.map(r => r._id);
   const pipeline = [
@@ -112,7 +136,9 @@ function buildUnreadTotalFilter(roomIds, myObjId, visibleMessagesFilter = null) 
 
 async function getUnreadTotal(myId) {
   const myObjId = new mongoose.Types.ObjectId(String(myId));
-  const rooms = await ChatRoom.find({ participants: myObjId }).select('_id hiddenFor').lean();
+  const blockedUserIds = await getBlockedUserIdSet(myId);
+  const foundRooms = await ChatRoom.find({ participants: myObjId }).select('_id participants hiddenFor').lean();
+  const rooms = filterAllowedRooms(foundRooms, myId, blockedUserIds);
   const roomIds = rooms.map(room => room._id);
   if (!roomIds.length) return 0;
   const visibleMessagesFilter = buildVisibleMessagesFilter(rooms, myObjId);
@@ -125,12 +151,13 @@ async function getUnreadTotal(myId) {
 async function getMyPartners(myId) {
   const myObjId = new mongoose.Types.ObjectId(String(myId));
   const rooms = await ChatRoom.find({ participants: myObjId }).select('participants').lean();
+  const blockedUserIds = await getBlockedUserIdSet(myId);
   return [
     ...new Set(
       (rooms || [])
         .flatMap(r => Array.isArray(r.participants) ? r.participants : [])
         .map(p => String(p))
-        .filter(pid => pid !== String(myId))
+        .filter(pid => pid !== String(myId) && !blockedUserIds.has(pid))
     )
   ];
 }
@@ -138,15 +165,22 @@ async function getMyPartners(myId) {
 /* ===========================================
  * [2] 채팅방 상세(메시지 포함)
  * =========================================== */
-async function getChatRoomDetail(roomId, myId, req) {
+async function getChatRoomDetail(roomId, myId, req, dependencies = {}) {
   const myObjId = new mongoose.Types.ObjectId(String(myId));
+  const ChatRoomModel = dependencies.ChatRoomModel || ChatRoom;
+  const MessageModel = dependencies.MessageModel || Message;
+  const checkBlocked = dependencies.areUsersBlocked || areUsersBlocked;
 
-  const chatRoom = await ChatRoom.findById(roomId)
+  const chatRoom = await ChatRoomModel.findById(roomId)
     .populate('participants', PARTICIPANT_FIELDS)
     .lean();
 
   const isMember = chatRoom?.participants?.some(p => String(p._id || p) === String(myId));
   if (!chatRoom || !isMember) throw new ChatRoomError(403, '접근 권한 없음');
+  const partner = otherParticipant(chatRoom, myId);
+  if (!partner || isUnavailableParticipant(partner) || await checkBlocked(myId, participantId(partner), dependencies)) {
+    throw new ChatRoomError(403, '차단 관계에서는 채팅방을 이용할 수 없습니다.');
+  }
 
   const normalizedParticipants = Array.isArray(chatRoom.participants)
     ? chatRoom.participants.map(p => normalizeUserPhotos(p, req))
@@ -156,7 +190,7 @@ async function getChatRoomDetail(roomId, myId, req) {
   const messageFilter = { chatRoom: roomId };
   if (hiddenAt) messageFilter.createdAt = { $gt: hiddenAt };
 
-  let messages = await Message.find(messageFilter)
+  let messages = await MessageModel.find(messageFilter)
     .sort({ createdAt: 1 })
     .populate('sender', 'nickname')
     .lean();
@@ -169,17 +203,30 @@ async function getChatRoomDetail(roomId, myId, req) {
 /* ===========================================
  * [3] 채팅방 생성 or 조회 (두 명 DM)
  * =========================================== */
-async function createOrGetChatRoom(myId, otherUserId) {
-  const myObjId = new mongoose.Types.ObjectId(String(myId));
-  const otherObjId = new mongoose.Types.ObjectId(String(otherUserId));
+async function createOrGetChatRoom(myId, otherUserId, dependencies = {}) {
+  let normalizedMyId; let normalizedOtherId;
+  try {
+    normalizedMyId = normalizeUserId(myId, '요청자');
+    normalizedOtherId = normalizeUserId(otherUserId, '상대방');
+  } catch (error) {
+    throw new ChatRoomError(error.status || 400, error.message);
+  }
+  if (normalizedMyId === normalizedOtherId) throw new ChatRoomError(400, '자기 자신과 채팅방을 만들 수 없습니다.');
+  const checkBlocked = dependencies.areUsersBlocked || areUsersBlocked;
+  if (await checkBlocked(normalizedMyId, normalizedOtherId, dependencies)) {
+    throw new ChatRoomError(403, '차단 관계에서는 채팅방을 만들 수 없습니다.');
+  }
+  const myObjId = new mongoose.Types.ObjectId(normalizedMyId);
+  const otherObjId = new mongoose.Types.ObjectId(normalizedOtherId);
 
-  let chatRoom = await ChatRoom.findOne({
+  const ChatRoomModel = dependencies.ChatRoomModel || ChatRoom;
+  let chatRoom = await ChatRoomModel.findOne({
     participants: { $all: [myObjId, otherObjId], $size: 2 }
   });
 
   let created = false;
   if (!chatRoom) {
-    chatRoom = new ChatRoom({ participants: [myObjId, otherObjId], messages: [] });
+    chatRoom = new ChatRoomModel({ participants: [myObjId, otherObjId], messages: [] });
     await chatRoom.save();
     created = true;
   }
@@ -226,6 +273,10 @@ module.exports = {
   buildUnreadTotalFilter,
   buildVisibleMessagesFilter,
   getHiddenAt,
+  participantId,
+  otherParticipant,
+  isUnavailableParticipant,
+  filterAllowedRooms,
   getMyPartners,
   getChatRoomDetail,
   createOrGetChatRoom,

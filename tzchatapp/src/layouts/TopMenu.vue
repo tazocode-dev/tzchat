@@ -54,7 +54,6 @@ import {
   chatbubblesOutline,
   personCircleOutline,
   diamondOutline,
-  flaskOutline,
   shieldCheckmarkOutline,
 } from 'ionicons/icons'
 
@@ -74,7 +73,6 @@ const menuItems = computed(() => [
   ...(userStore.isMaster
     ? [
         { name: '관리자', path: '/home/admin', icon: shieldCheckmarkOutline },
-        { name: '테스트', path: '/home/admin-test', icon: flaskOutline },
       ]
     : []),
 ])

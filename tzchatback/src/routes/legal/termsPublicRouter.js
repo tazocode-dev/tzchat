@@ -6,8 +6,7 @@
 const express = require('express');
 const router = express.Router();
 
-// ✅ 하이브리드 로그인 미들웨어
-const requireLogin = require('@/middlewares/requireLogin');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/legal/termsPublic.controller');
 
 // ------------------------------
@@ -24,16 +23,16 @@ router.get('/:slug/active', controller.activeBySlug);
 router.get('/:slug/versions', controller.versions);
 
 // POST /api/terms/consents — 단일 동의 저장/갱신 (로그인 필요)
-router.post('/consents', requireLogin, controller.postConsent);
+router.post('/consents', authMiddleware, controller.postConsent);
 
 // GET /api/terms/agreements/list — 모든 활성 동의서 + 사용자 상태
-router.get('/agreements/list', requireLogin, controller.agreementsList);
+router.get('/agreements/list', authMiddleware, controller.agreementsList);
 
 // GET /api/terms/agreements/status (별칭 /status) — 대기 중 항목 + 전체 현황
-router.get(['/agreements/status', '/status'], requireLogin, controller.agreementsStatus);
+router.get(['/agreements/status', '/status'], authMiddleware, controller.agreementsStatus);
 
 // POST /api/terms/agreements/accept — 배치 저장
-router.post('/agreements/accept', requireLogin, controller.agreementsAccept);
+router.post('/agreements/accept', authMiddleware, controller.agreementsAccept);
 
 // -----------------------------------------
 // 기존 호환 엔드포인트 (기존 프론트/앱 대비)
@@ -43,9 +42,9 @@ router.post('/agreements/accept', requireLogin, controller.agreementsAccept);
 router.get('/latest', controller.latest);
 
 // POST /api/terms/agree — 활성버전 일치 검증 + 메타 저장
-router.post('/agree', requireLogin, controller.postAgree);
+router.post('/agree', authMiddleware, controller.postAgree);
 
 // GET /api/terms/require-consent
-router.get('/require-consent', requireLogin, controller.requireConsent);
+router.get('/require-consent', authMiddleware, controller.requireConsent);
 
 module.exports = router;

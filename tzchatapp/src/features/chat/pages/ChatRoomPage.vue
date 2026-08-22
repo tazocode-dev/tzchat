@@ -8,10 +8,20 @@
             <strong>{{ partnerNickname }}</strong>
             <small>대화 중</small>
           </span>
-          <ion-button size="small" fill="clear" @click="goBack" aria-label="뒤로가기">
-            <span aria-hidden="true">‹</span>
-            뒤로
-          </ion-button>
+          <div class="header-actions">
+            <ion-button
+              class="report-user-btn"
+              size="small"
+              fill="clear"
+              :disabled="!canReportPartner"
+              :aria-label="`${partnerNickname} 신고하기`"
+              @click.stop="showReportModal = true"
+            >신고</ion-button>
+            <ion-button class="back-button" size="small" fill="clear" @click="goBack" aria-label="뒤로가기">
+              <span aria-hidden="true">‹</span>
+              뒤로
+            </ion-button>
+          </div>
         </div>
       </ion-toolbar>
     </ion-header>
@@ -129,6 +139,7 @@
             <textarea
               ref="textareaRef"
               v-model="newMessage"
+              maxlength="2000"
               placeholder="메시지를 입력하세요"
               @keydown="handleKeydown"
               @input="autoResizeComposer"
@@ -149,6 +160,7 @@
               @click="sendMessage"
             >전송</ion-button>
           </div>
+          <p v-if="composerError" class="composer-error" role="alert">{{ composerError }}</p>
         </div>
       </div>
 
@@ -173,6 +185,14 @@
         </transition>
       </Teleport>
     </ion-content>
+    <UserReportModal
+      v-if="showReportModal && canReportPartner"
+      :user-id="String(partnerId)"
+      :nickname="partnerNickname"
+      context-type="chat"
+      :chat-room-id="roomId"
+      @close="showReportModal = false"
+    />
   </ion-page>
 </template>
 
@@ -184,6 +204,7 @@ import { useRoute, useRouter } from 'vue-router'
 import axios from '@/shared/services/api'
 import { connectSocket } from '@/shared/services/socket'
 import ProfilePhotoViewer from '@/shared/components/ProfilePhotoViewer.vue'
+import UserReportModal from '@/shared/components/UserReportModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -195,11 +216,16 @@ const myId = ref('')
 const partnerId = ref('')
 const partnerNickname = ref('상대방')
 const partnerGender = ref('')
+const showReportModal = ref(false)
+const canReportPartner = computed(() => (
+  !!roomId && !!myId.value && !!partnerId.value && String(myId.value) !== String(partnerId.value)
+))
 
 const AVATAR_SIZE = 40
 
 const messages = ref([])
 const newMessage = ref('')
+const composerError = ref('')
 const chatScroll = ref(null)
 const textareaRef = ref(null)
 const composerWrapperRef = ref(null)
@@ -327,12 +353,17 @@ const loadMessages = async ()=> {
 const sendMessage = async ()=> {
   const content=newMessage.value.trim()
   if(!content) return
-  const res = await axios.post(`/api/chatrooms/${roomId}/message`,{content,type:'text'})
-  newMessage.value=''
-  pushMessageSafe({...res.data,createdAt:res.data.createdAt||new Date().toISOString()})
-  showEmoji.value = false
-  requestScrollToBottom()
-  await focusComposer(0)
+  composerError.value = ''
+  try {
+    const res = await axios.post(`/api/chatrooms/${roomId}/message`,{content,type:'text'})
+    newMessage.value=''
+    pushMessageSafe({...res.data,createdAt:res.data.createdAt||new Date().toISOString()})
+    showEmoji.value = false
+    requestScrollToBottom()
+    await focusComposer(0)
+  } catch (error) {
+    composerError.value = error?.response?.data?.message || '메시지를 전송하지 못했습니다.'
+  }
 }
 
 // 업로드
@@ -660,12 +691,19 @@ const goToPartnerProfile=()=>{ if(partnerId.value) router.push(`/home/user/${par
   background:transparent;
   box-sizing:border-box;
 }
+.header-actions { margin-left:auto; display:flex; align-items:center; gap:6px; }
 .chatroom-header ion-button{
   --padding-start:11px; --padding-end:11px; --border-radius:12px; --color:var(--gold-strong);
   --background:var(--panel-soft); --border-color:var(--panel-border);
-  min-height:38px; font-size:13px; font-weight:800; margin-left:auto;
+  min-height:38px; font-size:13px; font-weight:800; margin-left:0;
 }
-.chatroom-header ion-button span{ font-size:22px; line-height:1; margin-right:2px; }
+.chatroom-header .back-button span{ font-size:22px; line-height:1; margin-right:2px; }
+.chatroom-header .report-user-btn{
+  --color:#8f3238;
+  --background:#fff3f3;
+  --border-color:#efc9cb;
+  font-size:12px;
+}
 .chat-title{
   display:flex;
   flex-direction:column;
@@ -771,6 +809,9 @@ const goToPartnerProfile=()=>{ if(partnerId.value) router.push(`/home/user/${par
 }
 .chat-input textarea::placeholder{ color:var(--text-faint)!important; }
 .chat-input textarea:focus{ outline:none; box-shadow:0 0 0 3px var(--gold-soft)!important; border-color:var(--gold-500)!important; }
+.composer-error{
+  margin:0; padding:0 12px 8px; color:#9f2f35; font-size:12px; line-height:1.35;
+}
 
 .emoji-picker-wrapper{
   position:absolute; left:var(--gap-md);

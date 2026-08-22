@@ -12,9 +12,4 @@
     <!-- 📌 커스텀 URL 스킴 -->
     <string name="custom_url_scheme">com.tazocode.tzchat</string>
 
-    <!-- ✅ [추가] AdMob App ID (현재는 구글 테스트용 ID)
-         - 이 값이 없으면 Google Mobile Ads SDK가 초기화 단계에서 크래시 발생
-         - 배포 전에는 본인 앱의 App ID로 교체 필요
-         - 실제 값 형식: ca-app-pub-xxxxxxxxxxxxxxxx~xxxxxxxxxx -->
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>

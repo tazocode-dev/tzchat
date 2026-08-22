@@ -36,7 +36,15 @@ async function postHashes(req, res, next) {
     const result = await saveContactHashes(userId, req.body?.hashes);
     return res.json({ ok: true, ...result });
   } catch (err) {
-    if (err instanceof ContactsError) return res.status(err.status).json({ ok: false, error: err.message });
+    if (err instanceof ContactsError) {
+      if (!err.code) return res.status(err.status).json({ ok: false, error: err.message });
+      return res.status(err.status).json({
+        ok: false,
+        code: err.code,
+        message: err.message,
+        error: err.message,
+      });
+    }
     if (err?.code === 'OPTIONAL_CONSENT_REQUIRED') {
       return res.status(403).json({ ok: false, code: err.code, slug: err.details?.slug, message: err.message, error: err.message });
     }

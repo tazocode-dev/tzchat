@@ -1,6 +1,6 @@
 // src/services/admin/betaMigrationService.js
 // ────────────────────────────────────────────────────────────
-// 베타→일반회원 일괄 전환 도메인 서비스 (지침 §1). routes/admin/migrationRouter.js에서 분리.
+// 베타→일반회원 일괄 전환 도메인 서비스.
 // ────────────────────────────────────────────────────────────
 
 const { User } = require('@/models');
@@ -23,23 +23,26 @@ function nowKstISO() {
   return `${y}-${m}-${d}T${hh}:${mm}:${ss}+09:00`;
 }
 
-async function previewMigration() {
-  const total = await User.countDocuments({ user_level: BETA });
+async function previewMigration(dependencies = {}) {
+  const UserModel = dependencies.UserModel || User;
+  const total = await UserModel.countDocuments({ user_level: BETA });
   return { ts: nowKstISO(), targetLevelFrom: BETA, targetLevelTo: BASIC, total, dryRun: true };
 }
 
-async function executeMigration(dryRun) {
+async function executeMigration(dryRun = true, dependencies = {}) {
+  const safeDryRun = dryRun !== false;
+  const UserModel = dependencies.UserModel || User;
   const match = { user_level: BETA };
-  const total = await User.countDocuments(match);
+  const total = await UserModel.countDocuments(match);
 
   if (total === 0) {
     return {
       ts: nowKstISO(), targetLevelFrom: BETA, targetLevelTo: BASIC,
-      total, matched: 0, modified: 0, dryRun, note: '변경 대상이 없습니다.',
+      total, matched: 0, modified: 0, dryRun: safeDryRun, note: '변경 대상이 없습니다.',
     };
   }
 
-  if (dryRun) {
+  if (safeDryRun) {
     return {
       ts: nowKstISO(), targetLevelFrom: BETA, targetLevelTo: BASIC,
       total, matched: total, modified: 0, dryRun: true,
@@ -47,9 +50,8 @@ async function executeMigration(dryRun) {
     };
   }
 
-  // 실제 업데이트
   const now = new Date();
-  const result = await User.updateMany(match, { $set: { user_level: BASIC, updatedAt: now } });
+  const result = await UserModel.updateMany(match, { $set: { user_level: BASIC, updatedAt: now } });
 
   const matched = result.matchedCount ?? result.nMatched ?? 0;
   const modified = result.modifiedCount ?? result.nModified ?? 0;
@@ -60,8 +62,4 @@ async function executeMigration(dryRun) {
   };
 }
 
-function healthInfo() {
-  return { service: 'admin-migration', ts: nowKstISO() };
-}
-
-module.exports = { previewMigration, executeMigration, healthInfo };
+module.exports = { previewMigration, executeMigration };

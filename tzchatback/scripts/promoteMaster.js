@@ -1,128 +1,166 @@
-// /scripts/promoteMaster.js
-// 사용법 예시:
-//   node scripts/promoteMaster.js username=admin
-//   node scripts/promoteMaster.js id=6520f3...abcd
-//   node scripts/promoteMaster.js email=owner@domain.com
-// 옵션:
-//   role=master|admin (기본 master)
-//   dryrun=1  (변경 미적용, 대상만 조회)
-//   mongo=... (직접 연결문자열 지정; 없으면 환경변수 사용)
-//
-// 환경변수 우선순위:
-//   MONGODB_URI > MONGO_URI > MONGO_URL > (mongo 옵션) > 기본값
+#!/usr/bin/env node
+/**
+ * master 역할 승격 스크립트
+ *
+ * 기본 동작은 대상과 현재 역할만 확인하는 dry-run이다. 실제 변경은 apply=1을
+ * 명시한 경우에만 수행한다. 연결에는 MONGO_URI 환경변수만 사용한다.
+ *
+ * 사용법:
+ *   node scripts/promoteMaster.js username=<username>
+ *   node scripts/promoteMaster.js email=<email> apply=1
+ *   node scripts/promoteMaster.js userId=<ObjectId> apply=1
+ */
 
-require('dotenv').config();
+require('module-alias/register');
+
 const mongoose = require('mongoose');
+const { User } = require('../src/models');
+const { requireMongoUri, redactMongoUri, safeErrorDetails } = require('./scriptSafety');
 
-const argv = Object.fromEntries(
-  process.argv.slice(2).map(kv => {
-    const i = kv.indexOf('=');
-    return i === -1 ? [kv, true] : [kv.slice(0, i), kv.slice(i + 1)];
-  })
-);
+const SELECTOR_KEYS = new Set(['username', 'email', 'userId']);
+const ALLOWED_KEYS = new Set([...SELECTOR_KEYS, 'apply']);
 
-// --- Mongo 연결문자열 결정 ---
-const MONGO_URI =
-  process.env.MONGODB_URI ||
-  process.env.MONGO_URI ||
-  process.env.MONGO_URL ||
-  argv.mongo ||
-  'mongodb://127.0.0.1:27017/tzchat';
-
-console.log('[CFG] MONGO_URI =', MONGO_URI.replace(/\/\/([^@]+)@/, '//***@'));
-
-// --- User 모델 로딩 (여러 경로 시도) ---
-let User = null;
-const candidates = [
-  '../models/User',
-  '../models/user/User',
-  '../models/user',
-  '../backend/models/User',
-  '../backend/models/user/User',
-  '../backend/models/user',
-];
-for (const p of candidates) {
-  try {
-    const mod = require(p);
-    User = mod?.User || mod?.default || mod;
-    if (User && typeof User.findOne === 'function') {
-      console.log('[MODEL] Loaded User from', p);
-      break;
-    }
-  } catch {}
-}
-if (!User) {
-  console.error('[ERR] User 모델을 찾을 수 없습니다. models 경로를 확인하세요.');
-  process.exit(2);
+function promotionArgumentError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
-// --- 인자 파싱/검증 ---
-const { username, id, email } = argv;
-const roleArg = String(argv.role || 'master').toLowerCase();
-const dryrun = argv.dryrun === '1' || argv.dryrun === 1 || argv.dryrun === true;
-
-if (!username && !id && !email) {
-  console.error('사용법: node scripts/promoteMaster.js username=<아이디> | id=<ObjectId> | email=<메일주소> [role=master|admin] [dryrun=1]');
-  process.exit(1);
-}
-
-(async () => {
-  try {
-    await mongoose.connect(MONGO_URI);
-    console.log('✅ Connected to MongoDB');
-
-    // 조회 쿼리 구성
-    const q = id
-      ? { _id: id }
-      : (username ? { username } : { email });
-
-    const user = await User.findOne(q).lean();
-    if (!user) {
-      console.error('대상 사용자를 찾을 수 없습니다.', q);
-      process.exit(3);
+function parsePromotionArgs(args = process.argv.slice(2), mongooseClient = mongoose) {
+  const parsed = {};
+  for (const arg of args) {
+    const separator = arg.indexOf('=');
+    if (separator <= 0) {
+      throw promotionArgumentError(
+        'INVALID_PROMOTION_ARGUMENT',
+        '인자는 key=value 형식이어야 합니다.',
+      );
     }
-
-    console.log('[TARGET]', {
-      _id: String(user._id),
-      username: user.username,
-      email: user.email || null,
-      role: user.role || null,
-      roles: user.roles || null,
-      isAdmin: user.isAdmin || false,
-      isMaster: user.isMaster || false,
-    });
-
-    if (dryrun) {
-      console.log('🧪 dryrun 모드: 변경 없이 종료합니다.');
-      process.exit(0);
+    const key = arg.slice(0, separator);
+    const value = arg.slice(separator + 1).trim();
+    if (!ALLOWED_KEYS.has(key) || Object.hasOwn(parsed, key) || !value) {
+      throw promotionArgumentError(
+        'INVALID_PROMOTION_ARGUMENT',
+        '지원하지 않거나 중복된 승격 인자가 있습니다.',
+      );
     }
-
-    // 승격 업데이트: role 우선, 보조 플래그도 함께 세팅
-    const update = {
-      $set: { role: roleArg },
-      $addToSet: { roles: roleArg }, // roles 배열이 있다면 보강
-    };
-
-    // owner/superadmin이 아닌 경우에도 관리자 플래그 보강
-    if (roleArg === 'master' || roleArg === 'admin') {
-      update.$set.isAdmin = true;
-      if (roleArg === 'master') update.$set.isMaster = true;
-    }
-
-    const updated = await User.findByIdAndUpdate(user._id, update, { new: true });
-    console.log('[OK] 승격 완료:', {
-      _id: String(updated._id),
-      username: updated.username,
-      role: updated.role,
-      roles: updated.roles || null,
-      isAdmin: updated.isAdmin || false,
-      isMaster: updated.isMaster || false,
-    });
-    process.exit(0);
-  } catch (e) {
-    console.error('[ERR]', e?.message || e);
-    process.exit(9);
-  } finally {
-    await mongoose.disconnect().catch(() => {});
+    parsed[key] = value;
   }
-})();
+
+  const selectors = [...SELECTOR_KEYS].filter((key) => Object.hasOwn(parsed, key));
+  if (selectors.length !== 1) {
+    throw promotionArgumentError(
+      'INVALID_PROMOTION_SELECTOR',
+      'username, email, userId 중 하나의 대상만 지정해야 합니다.',
+    );
+  }
+  if (Object.hasOwn(parsed, 'apply') && parsed.apply !== '1') {
+    throw promotionArgumentError(
+      'INVALID_PROMOTION_APPLY',
+      '실제 승격은 apply=1로만 요청할 수 있습니다.',
+    );
+  }
+
+  const selectorType = selectors[0];
+  const selectorValue = parsed[selectorType];
+  if (selectorType === 'username' && selectorValue.length > 128) {
+    throw promotionArgumentError('INVALID_PROMOTION_SELECTOR', 'username 형식이 올바르지 않습니다.');
+  }
+  if (
+    selectorType === 'email'
+    && (selectorValue.length > 254 || !selectorValue.includes('@'))
+  ) {
+    throw promotionArgumentError('INVALID_PROMOTION_SELECTOR', 'email 형식이 올바르지 않습니다.');
+  }
+  if (selectorType === 'userId' && !mongooseClient.Types.ObjectId.isValid(selectorValue)) {
+    throw promotionArgumentError('INVALID_PROMOTION_SELECTOR', 'userId 형식이 올바르지 않습니다.');
+  }
+
+  const field = selectorType === 'userId' ? '_id' : selectorType;
+  const normalizedValue = selectorType === 'email' ? selectorValue.toLowerCase() : selectorValue;
+  return {
+    apply: parsed.apply === '1',
+    selector: { [field]: normalizedValue },
+    selectorType,
+  };
+}
+
+function safePromotionError(error) {
+  const details = safeErrorDetails(error);
+  const expectedCodes = new Set([
+    'INVALID_PROMOTION_ARGUMENT',
+    'INVALID_PROMOTION_SELECTOR',
+    'INVALID_PROMOTION_APPLY',
+    'MONGO_URI_REQUIRED',
+    'PROMOTION_TARGET_NOT_FOUND',
+  ]);
+  if (expectedCodes.has(details.code)) return details;
+  return {
+    name: details.name,
+    code: details.code,
+    message: 'master 승격 작업을 완료하지 못했습니다.',
+  };
+}
+
+async function main(options = {}) {
+  const logger = options.logger || console;
+  const mongooseClient = options.mongooseClient || mongoose;
+  const UserModel = options.UserModel || User;
+  let connected = false;
+
+  try {
+    const request = parsePromotionArgs(options.args, mongooseClient);
+    const mongoUri = requireMongoUri(options.env || process.env);
+
+    logger.log('[promote-master] target', redactMongoUri(mongoUri));
+    logger.log('[promote-master] mode', request.apply ? 'apply' : 'dry-run');
+    logger.log('[promote-master] selector', request.selectorType);
+
+    await mongooseClient.connect(mongoUri);
+    connected = true;
+
+    const user = await UserModel.findOne(request.selector).select('_id role').lean();
+    if (!user) {
+      throw promotionArgumentError(
+        'PROMOTION_TARGET_NOT_FOUND',
+        '승격 대상을 찾을 수 없습니다.',
+      );
+    }
+
+    logger.log('[promote-master] current role', user.role || null);
+    if (!request.apply) {
+      logger.log('[promote-master] dry-run completed; no user changes were made');
+      return { ok: true, applied: false };
+    }
+
+    const result = await UserModel.updateOne(
+      { _id: user._id },
+      { $set: { role: 'master' } },
+    );
+    logger.log('[promote-master] applied', {
+      matched: result.matchedCount ?? result.n ?? 0,
+      modified: result.modifiedCount ?? result.nModified ?? 0,
+    });
+    return { ok: true, applied: true };
+  } catch (error) {
+    const diagnostic = safePromotionError(error);
+    logger.error('[promote-master] failed', diagnostic);
+    return { ok: false, error: diagnostic };
+  } finally {
+    if (connected) {
+      await mongooseClient.disconnect().catch(() => {});
+    }
+  }
+}
+
+if (require.main === module) {
+  void main().then((result) => {
+    if (!result.ok) process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  main,
+  parsePromotionArgs,
+  safePromotionError,
+};

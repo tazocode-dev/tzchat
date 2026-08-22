@@ -1,574 +1,179 @@
-프로젝트 현재 상태
+# TZChat 현재 상태
 
-이 문서는 과거 작업을 누적하는 이력서가 아니라, 현재 시점에 유효한 프로젝트 상태를 보여주는 문서다.확인되지 않은 항목은 추측해서 채우지 말고 확인 필요로 유지한다.
+마지막 실제 상태 확인일: 2026-08-20
 
-마지막 실제 상태 확인일: 2026-08-17
+이 문서는 과거 작업 로그가 아니라 현재 코드·설정·검증 결과에서 유효한 사실만 유지한다.
 
-1. 프로젝트 기본 정보
+## 1. 프로젝트 개요
 
-항목
+- 서비스: TZChat, 사용자 표시명 `손끝`
+- 목적: 만 19세 이상 이용자 대상 데이팅·소셜 매칭
+- 운영 형태: 1인 개발·운영
+- 현재 단계: 저장소 기준 릴리스 후보 정비 완료, 최신 서버 배포·실기기·스토어 검증 대기
+- 앱 버전: `1.0.47`
+- Android `versionCode`: `47`
+- iOS build: `47`
+- 기준 저장소: `/Users/mac/tazocode/11017_tzchat/tzchat`
 
-현재 상태
+## 2. 정식 구조
 
-프로젝트명
-
-TZChat
-
-서비스 목적
-
-만 19세 이상 이용자 대상의 데이팅·소셜 매칭 서비스
-
-현재 단계
-
-개발·테스트
-
-운영 주체
-
-1인 개발·운영
-
-기준 저장소 경로
-
-/Users/mac/tazocode/11017_tzchat/tzchat
-
-구조 참고 프로젝트
-
-tzadmin
-
-2. 서비스 범위
-
-현재 제공하는 핵심 기능
-
-전화번호 문자 인증 가입·로그인, 약관 동의, 성인 온보딩, 프로필·일반 매칭·스피드 매칭·친구·채팅
-
-개발 중인 기능
-
-소셜 로그인 범위는 검토 예정
-
-현재 범위에서 제외한 기능
-
-별도 실명·통신사 본인확인은 사용하지 않으며, 포인트 차감과 유료 멤버십·결제 운영은 초기 홍보 기간에 제외
-
-3. 기술 스택
-
-아래는 TAZOCODE 프로젝트의 기본 방향이다. 실제 프로젝트에서 사용 중인지 코드와 설정으로 확인한 뒤 상태를 갱신한다.
-
-영역
-
-기본 방향
-
-실제 사용 상태
-
-Frontend
-
-Vue 3, TypeScript, Vite
-
-사용 중
-
-UI / Hybrid
-
-Ionic 8, Capacitor 7
-
-사용 중
-
-Backend
-
-Node.js 20 이상, Express 5
-
-사용 중
-
-Database
-
-MongoDB, Mongoose 8
-
-사용 중
-
-Web / Reverse Proxy
-
-Nginx
-
-설정 파일 확인
-
-상태관리
-
-Pinia
-
-사용 중
-
-테스트
-
-Node test runner, Vitest 구성
-
-백엔드 Node test runner 131개와 프론트엔드 Vitest 77개 통과. 프론트엔드는 별도 test npm 스크립트 없이 Vitest를 직접 실행
-
-4. 실행 환경
-
-환경별 구조와 실제 설정은 다음과 같다. 비밀값은 기록하지 않는다.
-
-실행 형태
-
-프론트엔드
-
-백엔드
-
-현재 검증 상태
-
-로컬 개발
-
-로컬
-
-로컬
-
-검증 완료
-
-서버 웹
-
-서버
-
-서버
-
-최상위 `nginx.md` 기준본과 적용·검증 절차 작성 완료. 외부 점검에서는 TLS 인증서 호스트 이름 불일치가 발생하고, 인증서 검증을 우회하면 웹·API·Socket.IO가 모두 TZChat이 아닌 TAZOCODE HTML을 반환하여 실제 서버 vhost·인증서 반영 필요
-
-Android/iOS 앱
-
-앱 내부 빌드
-
-서버
-
-운영 번들·Capacitor 설정과 Android `assembleDebug`·iOS generic device 무서명 빌드 검증 완료, 실기기 확인 필요
-
-환경별 핵심 확인 사항
-
-로컬 개발 API 주소: http://localhost:11018
-
-운영 API 도메인: https://tzchat.tazocode.com
-
-웹 서비스 도메인: https://tzchat.tazocode.com
-
-프론트엔드 포트: 11017
-
-백엔드 포트: 11018
-
-Nginx 제공 경로: `/home/tazofarm/project/tzchat/tzchatapp/dist`를 직접 제공하며 `/api`, `/socket.io`를 `127.0.0.1:11018`로 전달
-
-CORS 허용 범위: 개발은 `http://localhost:11017`만, 운영은 웹 도메인·Android `https://localhost`·iOS `capacitor://localhost`만 허용
-
-Capacitor 앱의 운영 API 연결: 운영 HTTPS 도메인 사용. `https://localhost`는 Android WebView Origin이며 API 주소가 아님
-
-HTTP/HTTPS 혼합 콘텐츠 문제: 운영 번들과 Android 설정에서 로컬·사설 API 및 cleartext 연결 차단 확인
-
-프론트 환경변수: `VITE_API_BASE_URL`, `VITE_APP_VERSION`, `VITE_HTTP_DEBUG`, `VITE_NOTIFICATION_DEBUG`만 사용하도록 정리
-
-환경 파일: 프론트·백엔드 모두 로컬은 각자의 `.env.development`, 서버 실행과 production 빌드는 각자의 `.env.production` 하나가 완결 설정이며 공통 `.env`는 사용하지 않음. 실제 환경 파일은 Git에 커밋하지 않고 서버에는 `tzchatapp/.env.production`과 `tzchatback/.env.production`을 수동 반영
-
-5. 실행 및 검증 명령
-
-실제 package.json에 존재하는 명령만 기록한다.
-
-Frontend
-
-목적
-
-명령
-
-로컬 실행
-
-npm run dev
-
-빌드
-
-npm run build
-
-앱 빌드·동기화
-
-`npm run build:app`
-
-테스트
-
-별도 npm 스크립트 없음. 전체 검증은 `npx vitest run`으로 실행
-
-타입 검사
-
-npm run build에 vue-tsc --noEmit 포함
-
-린트
-
-별도 npm 스크립트 없음
-
-빌드 동작
-
-`npm run build`는 production `VITE_API_BASE_URL`을 빌드 전에 운영 도메인과 exact 검증하고 타입 검사·Vite production 빌드·번들 검사를 실행. `npm run build:app`은 그 결과를 Android/iOS에 `cap copy`한 뒤 웹·네이티브 자산 일치를 검사
-
-Backend
-
-목적
-
-명령
-
-로컬 실행
-
-npm run dev
-
-운영 실행
-
-`npm start` 또는 PM2 ecosystem 기반 `npm run pm2:start`
-
-운영 무중단 재반영
-
-`npm run pm2:reload`
-
-배포 전 검사
-
-`npm run build`
-
-빌드 동작
-
-컴파일 산출물을 만들지 않고 구문·Node 버전·운영 환경 및 배포 안전 조건을 검사
-
-테스트
-
-npm test
-
-린트
-
-별도 npm 스크립트 없음
-
-6. 현재 폴더 구조
-
-첫 점검 시 실제 구조를 지나치게 세분화하지 말고 주요 경계만 기록한다.
-
-프로젝트 루트/
+```text
+tzchat/
 ├── AGENTS.md
-├── legal/       # 게시 전 검토용 법률·동의·안전정책 HTML과 내부 확인표
-├── nginx.md    # 운영 Nginx 설정의 저장소 기준본
+├── README.md
+├── RELEASE_CHECKLIST.md
+├── deploy/nginx/tzchat.conf
+├── legal/
 ├── status.md
 ├── history.md
-├── tzchatapp/   # Vue·Ionic·Capacitor 프론트엔드
-└── tzchatback/  # Node.js·Express·MongoDB 백엔드
-
-구조 원칙
-
-폴더나 파일 구조를 새로 만들거나 변경할 때 tzadmin의 관련 구조를 먼저 참고한다.
-
-현재 프로젝트의 기능 차이를 반영하고, tzadmin을 그대로 복제하지 않는다.
-
-현재 구조에서 발견되는 예외나 임시 배치는 아래 알려진 문제에 기록한다.
-
-7. 외부 서비스와 운영 구성
-
-비밀값, 계정 정보, 토큰은 기록하지 않는다.
-
-항목
-
-현재 상태
-
-서버
-
-Ubuntu 기반 N100 홈서버 / 실제 배포 여부 확인 필요
-
-프로세스 관리
-
-PM2 ecosystem은 production 실행 표식만 제공하고 환경값은 백엔드 `.env.production`에서 로드하도록 반영, 실제 서버 프로세스 재생성 확인 필요
-
-Nginx
-
-최상위 `nginx.md`에 프로젝트 `dist` 직접 제공 설정과 활성 vhost·인증서 SAN·웹/API/Socket.IO 검증 절차 작성, 사용자의 운영 서버 수동 반영 필요
-
-데이터베이스 운영 위치
-
-확인 필요
-
-도메인·HTTPS
-
-운영 웹·API HTTPS 도메인은 코드에 반영됨. 외부 실제 점검은 인증서 hostname mismatch이며, 인증서 우회 시 `/`, `/api/health`, `/socket.io`가 모두 TAZOCODE HTML을 반환하여 서버 적용 필요
-
-이메일 인증
-
-기본 로그인에서는 사용하지 않고 기존 이메일 계정 호환과 설정의 이메일 인증·변경에 유지. 로그인 고정번호·권한 보정 목록은 현재 비워 두었으며, 일반 이메일 인증은 TZMail 실제 발송을 사용
-
-SMS 인증
-
-기본 가입·로그인, 설정 및 로그인 전 전화번호 변경에 사용. 일반 번호는 TZPhone으로 실제 발송하고, `REVIEW_LOGIN_PHONES`와 `PHONE_FIXED_LOGIN_ACCOUNTS`의 로그인만 문자 미발송·환경별 고정번호를 적용. 로그인 전 번호 변경에는 로그인용 고정번호 예외를 적용하지 않음. `PHONE_ACCOUNT_ROLE_OVERRIDES`로 master/user 권한을 보정하며 현재 TZPhone API 키는 사용자 입력 대기 상태
-
-소셜 로그인
-
-후속 검토
-
-백업
-
-확인 필요
-
-로그 관리
-
-확인 필요
-
-스토어 배포
-
-확인 필요
-
-8. 현재 진행 상태
-
-완료
-
-백엔드는 `NODE_ENV`에 해당하는 `.env.{environment}` 하나만 필수로 읽고 shell·PM2 외부값을 파일보다 우선하도록 적용. 로컬은 `.env.development`, 서버는 `.env.production`, 자동화 테스트는 `.env.test`로 분리하며 공통 `.env`는 사용하지 않음
-
-프론트·백엔드의 실제 `.env*`와 서버 서비스 계정 JSON은 Git에서 제외하고 환경별 `.env.development.example`, `.env.production.example`만 유지. 환경이 모호한 `.env.example`은 제거
-
-개발·운영 CORS exact allowlist, 로컬·운영 TZMail provider와 전역 고정 이메일 번호 차단, 테스트 전용 dev provider 분리 검증 적용
-
-기본 로그인 화면과 API를 이메일 인증에서 전화번호 문자 인증으로 전환. 로그인 인증번호는 5분 만료·1회 사용·재발송·시도 횟수 제한을 적용하고, 기존 중복 허용 `phone`과 분리된 고유 `loginPhone`으로 계정 연결을 보장
-
-심사용 전화 목록·공통번호, 개별 고정 로그인 계정, master/user 권한 보정 목록을 `.env.development`, `.env.production`에서 관리하고 잘못된 번호·코드·권한·중복 항목은 기동 시 차단
-
-기존 계정 이메일은 같은 사용자 ID로 로그인하고, 이메일 변경 중 다른 계정 소유 이메일은 변경을 차단하면서 별도 계정 전환 흐름을 제공하도록 반영
-
-프론트 운영 API·Capacitor WebView Origin 분리, Android/iOS 번들의 로컬·사설 API 검사, PM2 ecosystem 실행 경로와 재시작 제한 적용
-
-프론트 production 빌드 전에 `VITE_API_BASE_URL`을 운영 도메인과 exact 검증하고, 앱 빌드는 Android/iOS `cap copy` 후 웹 `dist`와 네이티브 public 자산 일치까지 검사하도록 배포 경계 강화. 프론트 환경 키는 `VITE_API_BASE_URL`, `VITE_APP_VERSION`, `VITE_HTTP_DEBUG`, `VITE_NOTIFICATION_DEBUG`로 정리
-
-백엔드는 Node 20 이상을 요구하고 공개 미디어 URL의 기준을 `PUBLIC_API_ORIGIN`으로 단일화. 폐기된 공개 URL 환경 키는 거부하며 production 런타임에는 저장소 외부의 읽을 수 있는 FCM 서비스 계정 파일을 필수 검증. `npm run build`는 컴파일 산출물이 아닌 배포 전 검사로 유지
-
-운영 Nginx 기준본을 최상위 `nginx.md`로 정리하고 별도 `/var/www` 복사 없이 프로젝트의 `tzchatapp/dist`를 직접 제공하도록 확정. 활성 vhost 중복, 인증서 SAN, Nginx 구문·reload, 웹/API/Socket.IO 응답을 확인하는 수동 적용 절차 포함
-
-로컬 백엔드 health, 허용·거부 CORS 응답과 개발 MongoDB 연결 확인
-
-전화번호 인증 로그인 흐름과 테스트·관리자 계정, 필수/선택 약관 게이트, 유효한 성인 나이·성별 온보딩 적용. 일반 사용자는 새로고침·앱 재실행·직접 URL·세션 중 필수 정책 변경에서도 완료 상태를 다시 확인하여 미완료 단계를 안내하고 메인 화면과 API를 차단하며 master 예외는 유지
-
-설정의 인증정보 화면, 최초 전화번호의 문자 인증, 기존·새 이메일 이중 인증 변경, 현재 이메일 인증과 새 번호 문자 인증을 함께 요구하는 전화번호 변경 서버 검증
-
-로그인 화면 하단의 전화번호 변경 인증. 기존 로그인 전화번호와 인증된 이메일이 같은 계정에 일치하고 해당 전화번호도 인증된 상태이며, 기존 이메일 코드를 먼저 확인한 경우에만 새 번호 문자를 발송. 기존 이메일 코드와 중복되지 않은 새 전화번호 문자 코드를 모두 확인한 경우에만 로그인 식별 번호를 변경하며 공개 발송 응답은 계정·인증·번호 충돌 여부를 구분하지 않음
-
-전화번호 인증 요청 성공 뒤에만 인증번호 입력칸을 표시하고, 지정된 테스트 번호 5개는 모든 실행 환경에서 실제 문자를 보내지 않고 `123456`을 사용하는 정책 적용
-
-밝은 뉴트럴·흰 카드·짙은 브라운 텍스트·브라스 포인트의 전역 디자인 토큰으로 색상 대비를 높이고, 상대 프로필·공지·비밀번호 변경·회원탈퇴의 잔존 다크 스타일과 흰 글자 충돌 정리
-
-일반 매칭과 스피드 매칭의 후보·신청·결과 분리, 매일 13:00~15:00·21:00~23:00 시작 제한, 시간대별 1회·고정 1시간 세션·잠시 숨김/재참여 처리
-
-채팅 미읽음을 사용자별 `readBy`로 분리하고 읽은 사용자에게만 배지 갱신을 전송하며, 받은 신청·스피드 결과·친구·차단의 변경/확인 시각을 사용자별로 저장하는 범주별 NEW 표시 적용
-
-채팅 목록 삭제를 요청 사용자별 숨김 시각으로 처리하여 상대방의 대화와 원본 메시지를 유지하고, 삭제한 사용자에게는 이후 새 메시지부터 다시 목록·대화·미읽음을 표시
-
-하단 친구에는 새 변경 범주 수, 하단 채팅과 채팅방 목록에는 안 읽은 메시지 수를 표시하고 친구 상단 탭을 누르면 해당 범주만 확인 처리
-
-Capacitor Push Notifications 기반 Android/iOS 권한·수신·클릭 처리를 유지하면서 두 플랫폼 모두 FCM registration token을 사용하도록 통일. Android는 공식 registration 이벤트를 사용하고, iOS는 Firebase Core/Messaging과 로컬 Capacitor 브리지로 최초·갱신 FCM 토큰을 전달하며 Firebase Admin이 Android/iOS/Web 토큰을 통합 발송. 서비스 계정은 `FCM_SA_PATH`만 지원하고 절대경로이면서 백엔드 저장소 외부의 실제 경로인지를 DB 연결 전에 검증하며, 상대경로·저장소 내부 경로·내부 파일을 가리키는 심볼릭 링크는 서버 시작 시 거부. master 전용 제한형 테스트 발송 API를 제공
-
-네이티브 푸시는 알림 설정 ON을 발송 직전에 재확인하고 사용자별 다중 기기 토큰을 유지하며, 로그아웃에서는 인증 소멸 전에 현재 기기 토큰만 해제하고 무효·미등록 토큰만 정리. 잠금화면에는 채팅 본문·닉네임 없이 종류별 고정 문구만 사용하고, iOS 중첩 data 객체·JSON 문자열을 정규화한 뒤 허용 type과 MongoDB ObjectId 기반 대상으로만 라우팅. Android 13+ 권한과 Android 8+ high 채널·전용 아이콘·기본 소리·진동 및 iOS alert/sound/badge 권한·Push entitlement·Background Modes의 Remote notifications를 유지
-
-Android 하드웨어 뒤로가기는 단일 앱 전역 리스너로 처리. 오버레이·키보드를 먼저 닫고 내부 이력이 있으면 한 단계만 이동하며, 이력 없는 상세 진입은 `/home/6page`로 복귀. 기준 홈에서는 2초 안에 두 번 눌러야 앱을 종료하고 로그인·필수 약관·온보딩 흐름은 메인으로 우회하지 않음
-
-사용자 표시명은 Android/iOS/Capacitor 설치명, Android 액티비티, 웹/PWA 제목, 로그인·관리자 로그인·온보딩·앱 헤더와 사용자 문의·신고·메일·푸시에서 `손끝`으로 통일. 법적 공식 서비스명 `TZChat`과 패키지·Firebase·도메인·딥링크 등 기술 식별자는 유지
-
-약관 동의 화면은 서버가 지정한 필수·선택 항목과 버전을 기준으로 하되 공개 법적 문서 매핑의 항목명·요약·필수/선택 배지·자세히 보기를 명확히 표시. 모두 동의는 전체 항목을 선택하고 선택 항목 거부는 제출을 막지 않으며, 상세 문서 확인 전 선택 상태는 현재 사용자 계정에 한정해 임시 보존
-
-가입 동의 메타데이터는 공개 문서 시행일에 맞춘 고정 버전 `2026-08-13-01`로 필수 4개(`terms`, `guidelines`, `youth-policy`, `privacy-consent`)와 선택 2개(`sensitive-information-consent`, `contacts-consent`)를 관리. 로컬 개발 DB에는 6개를 초기화했고 반복 실행 시 중복되지 않음을 확인. 필수 메타데이터 누락은 503으로 완료 처리를 차단하고, 필수 slug를 누락한 배치 동의는 저장 전 400으로 거부하며 미선택 선택 항목은 `optedIn:false`로 기록
-
-연락처 지인 제외 선택 동의는 실제 기능과 연결. `contacts-consent` 현재 활성 버전의 `optedIn:true`가 없으면 서버가 연락처 해시 저장과 지인 제외 ON을 403으로 차단하고, 프론트는 기능을 켤 때 목적·처리 항목·거부 영향을 안내한 뒤 동의를 받음. 단일 철회 또는 배치 미선택 시 저장된 연락처 해시를 삭제하고 지인 제외를 OFF로 변경한 후 동의 기록을 `false`로 저장
-
-민감정보 선택 동의는 구조화 필드 `preference`와 `search_preference`만 대상으로 실제 기능과 연결. `sensitive-information-consent` 현재 활성 버전의 `optedIn:true`가 없으면 서버가 두 필드 저장을 403으로 차단하고, 프론트는 두 성향 편집 진입 시 동의를 받은 후에만 모달을 연다. 단일 철회 또는 배치 미선택 시 두 필드를 빈 값으로 정리한 후 동의 기록을 `false`로 저장하며, 신규 User 기본값도 빈 값으로 유지. `selfintro` 자유문, 일반 성별, 결혼 여부와 기타 프로필·검색 설정은 이 선택 동의 대상이 아님
-
-프로필 사진 신규 업로드는 당분간 최대 2장으로 제한. 프론트는 1·2번 빈 슬롯만 추가를 허용하고 3~8번 빈 슬롯은 잠금 표시하며, 백엔드는 처리 전 개수 검사와 원자적 DB 조건으로 동시 요청도 2장을 넘지 못하게 차단. 기존에 3장 이상 저장된 사진은 임의 삭제하지 않고 계속 표시·관리·삭제할 수 있음
-
-`test@tazocode.com`, `test1@tazocode.com`~`test4@tazocode.com`의 스피드 매칭 상시 시작·만료 후 재시작 예외
-
-master 계정에만 하단 메뉴의 프로필 오른쪽에 관리자 탭을 표시하고, 서버·DB·접속·로그 현황 및 회원 검색·공지·약관·베타 전환 중심으로 `/home/admin` 운영 화면 재구성
-
-master 전용 하단 테스트 탭과 `/home/admin-test` 순수 시각 샘플 대시보드 추가. 화면 구성 점검용 정적 샘플만 표시하며 실제 API 호출이나 데이터 변경 없음
-
-초기 무료 운영을 위한 포인트 차감·지갑 노출 제거와 멤버십·결제 진입/API 비활성화
-
-현재 무료 서비스와 실제 개인정보 처리 구조를 기준으로 `legal/`에 이용약관·개인정보·선택 기능 동의·안전정책 HTML 초안 14종, 문서 목록과 게시 전 내부 확인표 작성
-
-GitHub Pages의 개인정보 처리방침·이용약관·아동 안전 기준·계정 삭제 안내 4종을 법적 본문의 단일 공개 출처로 정하고 앱 내부 iframe으로 표시. 4개 canonical URL의 HTTP 200 응답을 확인했으며, 모바일 iframe에는 표 좌우 스크롤 안내와 중첩 iframe 없이 원문을 여는 전체 화면 보기를 제공. 기존 12개 slug는 공개 문서와 세부 anchor로 연결하며 Terms API는 동의 버전·문서 ID·필수 여부와 사용자 동의 기록 용도로 유지. 과거 개인정보·이용약관·아동안전 설정 딥링크는 해당 canonical 내부 라우트로 redirect하고, 미참조 앱 번들 법적 txt와 LegacyHost는 제거
-
-최종 전체 검증에서 백엔드 테스트 131/131과 프론트 테스트 77/77, 백엔드 build, 프론트 production build, `build:app`의 Android/iOS 자산 복사·일치 검사와 Android `assembleDebug`가 모두 통과
-
-진행 중
-
-실제 Android 기기에서 오버레이·키보드·내부 이력·딥링크·홈 2회 입력 종료 동작 확인 필요
-
-실제 브라우저·Android/iOS 기기에서 신규 가입 및 스피드 매칭 전체 흐름 확인 필요
-
-실제 브라우저·앱에서 master·일반 계정의 관리자 하단 탭 노출 차이와 공지 작성·수정 흐름 확인 필요
-
-실제 브라우저·Android/iOS 앱에서 로그인·상대 프로필·공지·비밀번호 변경·회원탈퇴의 모바일/넓은 화면 가독성 확인 필요
-
-서로 다른 두 계정으로 채팅 송수신 읽음 분리, 친구 범주별 NEW 생성·해제, 계정 전환 뒤 개인 소켓 알림 격리 확인 필요
-
-실제 Android/iOS 기기에서 포그라운드·백그라운드·종료 상태의 FCM 푸시 수신, 토큰 갱신, 알림 탭 이동과 OFF·로그아웃 뒤 미수신 확인 필요. Apple APNs 키의 Firebase 개발·프로덕션 등록은 사용자가 완료했으며, 서버 운영 환경에는 저장소 밖의 읽을 수 있는 서비스 계정 파일 경로를 사용자가 직접 반영해야 함. 실제 iOS 프로비저닝과 기기 수신은 미검증. 기존 직접 APNs 발송 코드와 관련 환경 설정은 현재 발송 경로에서는 사용하지 않지만, iOS FCM 실기기 검증 전까지 보존하고 검증 완료 뒤 제거하는 것이 다음 작업
-
-TZPhone API 키를 개발·운영 환경에 입력한 뒤 실제 번호 로그인과 설정·로그인 전 전화번호 변경의 전체 흐름 확인 필요
-
-실제 웹·Android/iOS에서 공개 법적 문서 iframe, 모바일 표 좌우 스크롤 안내와 전체 화면 보기, 동의 4필수·2선택 저장 후 온보딩 이동을 확인할 필요가 있음. 외부 발송사업자·Firebase 국외 처리 세부정보와 업로드 파일 삭제 범위는 공개 전 확정 필요
-
-실제 Android/iOS 기기에서 연락처 권한 허용·거부, `contacts-consent` 동의·철회·현재 버전 변경, 해시 업로드·삭제·ON/OFF와 `preference`·`search_preference` 두 성향의 동의·편집·철회 흐름을 통합 확인할 필요가 있음
-
-보류
-
-유료 멤버십과 포인트 정책은 회원 확보 후 재검토
-
-9. 알려진 문제
-
-문제는 재현 조건과 영향만 짧게 기록하고, 긴 조사 로그는 남기지 않는다.
-
-우선순위
-
-문제
-
-영향
-
-현재 상태
-
-높음
-
-탈퇴 작업과 메시지 TTL은 DB 문서를 정리하지만 프로필·채팅 업로드 파일과 일부 연관 모델의 동일 기간 자동 삭제가 확인되지 않음
-
-공개 데이터 보관·삭제 정책과 실제 파기 시점이 불일치할 수 있음
-
-업로드 파일·동의·친구신청·신고 등 연관 데이터 정리 범위를 구현·테스트하거나 정책을 실제 동작에 맞게 확정 필요
-
-높음
-
-Apple UGC 정책이 요구하는 부적절한 콘텐츠 게시 방지 필터의 실제 구현이 확인되지 않고, 현재 사용자 신고는 이메일 작성 흐름 중심임
-
-문서에 금지행위·신고·차단·연락처를 고지했더라도 App Store 심사와 신속 대응 요건을 충족하지 못할 수 있음
-
-서버 측 게시 방지·검수 수단과 앱 내부 신고 접수·처리 상태·응답 절차를 구현하고 운영 기준을 확정할 필요가 있음
-
-높음
-
-Android Firebase Analytics가 동의 전 자동 수집될 수 있음. 미사용 위치 권한 선언과 일괄요청 동작은 제거함
-
-선택 동의 원칙과 실제 SDK·권한 동작이 불일치할 수 있음
-
-분석 동의 전 수집 비활성화 필요. 좌표 기반 위치 기능을 도입할 때 별도 동의·고지와 런타임 권한 요청을 다시 설계해야 함
-
-중간
-
-앱의 민감정보 상세 링크가 사용하는 외부 GitHub Pages `privacy.html#sensitive` 앵커와 정리된 공개 법적 문서가 별도 `tazocode-legal` 저장소에 아직 반영·배포되지 않음
-
-민감정보 선택 동의 상세 링크가 정확한 본문 위치를 열지 못하고, 앱·저장소의 공개 문구가 다를 수 있음
-
-별도 `tazocode-legal` 저장소에 확정된 선택 동의 범위와 `sensitive` 앵커를 반영·배포한 뒤 웹·Android·iOS의 상세 링크를 확인할 필요가 있음
-
-중간
-
-원격 TZMail 상태와 손끝 앱 자격증명은 검증했으나 설정의 이메일 추가·변경과 기존 이메일 계정 로그인 수신은 확인하지 않음
-
-메일 제공자·수신함까지 포함한 보조 이메일 인증 흐름은 미검증
-
-수신 가능한 일반 이메일로 설정 인증번호 요청·수신과 기존 계정 로그인 확인 필요
-
-높음
-
-운영 `tzchat.tazocode.com`의 TLS 인증서가 요청 호스트 이름과 일치하지 않으며, 인증서 검증 우회 시 웹 `/`, `/api/health`, Socket.IO polling이 모두 TZChat이 아닌 TAZOCODE HTML을 반환함
-
-정상 인증서 검증으로 웹·API에 접근할 수 없고, 현재 활성 vhost가 TZChat 프론트·백엔드로 요청을 전달하지 않아 서버 웹과 앱 API 연결에 영향
-
-최상위 `nginx.md` 기준으로 sites-enabled 활성화·중복 server_name·기본 vhost를 정리하고 올바른 인증서 SAN 확인 후 구문 검사·reload·웹/API/Socket.IO 외부 재검증 필요
-
-높음
-
-스피드 매칭의 모바일 하단 확인창과 시간대 전환·숨김 후 재참여는 빌드와 단위 테스트만 확인함
-
-실제 기기 화면 및 서버 시각을 포함한 통합 동작은 미검증
-
-모바일 실기기에서 낮·밤 운영 경계와 1시간 만료 흐름 확인 필요
-
-높음
-
-전화번호 로그인 API와 화면은 구현·테스트됐으나 사용자 요청에 따라 TZPhone API 키가 비어 있음
-
-현재 설정 그대로는 일반 번호 문자 발송과 백엔드 운영 빌드 검사가 차단됨. 환경변수 고정번호 로그인은 별도 공급자 발송 없이 동작
-
-키 입력 후 수신 가능한 실제 번호로 공급자 인증, 문자 수신, 신규·기존 계정 로그인과 번호 변경을 통합 검증할 필요가 있음
-
-10. 확정된 현재 결정
-
-아래에는 현재도 유효한 결론만 적는다. 결정 과정과 이유는 history.md에서 관리한다.
-
-웹 서비스를 먼저 구축하고 안정화한 뒤 하이브리드 앱으로 확장한다.
-
-Vue, Node.js, MongoDB, Nginx, Ionic, Capacitor 중심의 기존 기술 방향을 우선한다.
-
-1인 개발자가 감당할 수 있는 단순하고 비용 효율적인 구조를 우선한다.
-
-로컬은 프론트엔드·백엔드 모두 로컬, 서버 웹은 모두 서버, 앱은 앱 프론트엔드·서버 백엔드 구조를 기준으로 한다.
-
-폴더 트리나 파일 구조를 변경할 때는 tzadmin을 참고하되 프로젝트 특성에 맞게 적용한다.
-
-일반 회원의 기본 가입·로그인은 전화번호 문자 인증 방식으로 운영한다. 기존 이메일 로그인 API는 기존 계정 호환용으로만 유지하고 기본 화면에는 노출하지 않는다.
-
-일반 사용자는 필수 약관, 서버가 유효성과 성인 조건을 확인한 나이 정보, 성별 선택을 모두 완료해야 메인 화면과 API를 이용할 수 있다. 새로고침·앱 재실행·직접 URL 접근·세션 중 필수 정책 변경에서도 완료 상태를 다시 확인하고 필요한 단계로 안내하며 master 예외는 유지한다.
-
-선택 약관 거부는 서비스 이용을 막지 않는다.
-
-신규 회원 온보딩은 출생연도만 수집하며, 19세가 되는 해부터 이용할 수 있다.
-
-출생연도는 저장 후 사용자가 직접 변경할 수 없다.
-
-이메일 수정은 기존 이메일이 인증된 계정이면 기존 이메일과 새 이메일 인증을 모두 요구한다.
-
-최초 전화번호 등록은 새 번호의 문자 인증만 요구한다. 기존 인증 전화번호 변경은 이메일 인증 완료 계정만 가능하며 현재 이메일 인증번호와 새 전화번호 문자 인증번호를 모두 서버에서 검증한다.
-
-로그인 전 전화번호 변경은 기존 로그인 전화번호와 기존 인증 이메일이 같은 계정에 일치하고 기존 전화번호도 인증된 계정에만 허용한다. 기존 이메일 인증번호를 먼저 확인해야 새 전화번호 문자를 발송하며 이 단계에서는 이메일 코드를 소비하지 않는다. 최종 단계에서 이메일과 새 전화번호 인증번호를 함께 확인·소비하고 새 번호가 다른 계정의 로그인 식별자로 사용되지 않을 때만 변경한다. 공개 발송 API는 계정 존재·미인증·번호 충돌을 같은 응답으로 처리한다.
-
-개발은 로컬 API·정확한 로컬 웹 Origin과 원격 TZMail·TZPhone을 사용한다. 기본 전화 로그인 계정 정책은 개발·운영 환경 파일의 명시적 목록으로만 적용하고, 이메일 고정 로그인·권한 목록은 비워 둔다.
-
-로컬·운영·앱의 일반 전화번호 로그인은 모두 백엔드의 실제 TZPhone 발송을 사용한다. `REVIEW_LOGIN_PHONES`와 `PHONE_FIXED_LOGIN_ACCOUNTS`에 지정된 로그인만 실제 문자를 보내지 않고 각 환경변수의 인증번호를 사용한다.
-
-운영은 HTTPS 웹/API, 웹·Android/iOS WebView의 정확한 CORS Origin, 실제 TZMail·TZPhone 공급자를 사용한다. TZMail·TZPhone과 같은 서버에서는 loopback API 주소를 사용한다.
-
-전화 로그인 식별자는 기존 중복 허용 프로필 전화번호와 분리된 고유 `loginPhone`으로 연결한다. 같은 기존 전화번호를 가진 계정이 여러 개면 임의 계정으로 로그인하지 않고 관리자 확인 오류로 중단한다.
-
-다른 계정 소유 이메일로 현재 계정 이메일을 변경하는 것은 차단하지만, 해당 기존 계정으로 로그인하는 별도 전환 흐름은 허용한다. 계정 전환 시 서로 다른 계정의 로컬 데이터를 자동 병합하지 않는다.
-
-프론트·백엔드 모두 공통 `.env`를 사용하지 않는다. 로컬은 각 프로젝트의 `.env.development`, 서버 실행과 production 빌드는 각 프로젝트의 `.env.production` 하나를 완결 설정으로 사용하며 실제 환경 파일은 Git에 커밋하지 않는다. 서버 수동 업로드 대상은 `tzchatapp/.env.production`과 `tzchatback/.env.production`이다.
-
-백엔드는 `NODE_ENV`에 해당하는 `.env.{environment}` 하나만 필수로 읽고 shell·PM2 외부값을 우선한다. 운영 PM2 프로세스는 `ecosystem.config.cjs`의 production 실행 표식으로 시작하며 ecosystem에 환경값을 중복 관리하지 않는다.
-
-프론트 production 빌드는 `VITE_API_BASE_URL`을 운영 API Origin과 exact 검증한 뒤 진행하며, 앱 배포 빌드는 Android/iOS 복사 후 웹·네이티브 자산 일치까지 확인한다. 프론트 환경 키는 `VITE_API_BASE_URL`, `VITE_APP_VERSION`, `VITE_HTTP_DEBUG`, `VITE_NOTIFICATION_DEBUG`만 사용한다.
-
-백엔드는 Node 20 이상을 사용하고 외부에 반환하는 미디어 URL의 Origin은 `PUBLIC_API_ORIGIN`만 기준으로 삼는다. 폐기된 공개 URL 키는 거부하고 production 런타임에는 저장소 외부의 읽을 수 있는 FCM 서비스 계정 파일을 필수로 확인한다. 백엔드 `npm run build`는 컴파일이 아니라 배포 전 안전 검사이다.
-
-운영 Nginx 설정의 저장소 기준본은 최상위 `nginx.md`이며, Nginx는 `npm run build`가 생성한 `tzchatapp/dist`를 별도 복사 없이 직접 제공한다. 실제 적용 시 활성 vhost·중복 server_name·인증서 SAN을 확인하고 웹·API·Socket.IO 응답을 각각 검증한다.
-
-초기 홍보 기간에는 포인트를 사용·차감하지 않고 유료 멤버십과 결제를 운영하지 않는다.
-
-일반 매칭과 스피드 매칭은 후보 목록, 신청 출처, 결과를 구분한다.
-
-스피드 매칭은 성별·회원등급 차등 없이 무료이며 매일 한국시간 13:00~15:00, 21:00~23:00에 시작할 수 있다.
-
-스피드 매칭은 시간대별 한 번만 시작할 수 있고 시작 시점부터 1시간으로 종료 시각을 고정한다. 잠시 숨겨도 시간은 계속 흐르며 남은 시간 동안 재참여할 수 있다.
-
-`PHONE_ACCOUNT_ROLE_OVERRIDES`에 지정된 전화 로그인 계정은 서버에서 master 또는 user 권한으로 보정한다. master 계정에만 하단 메뉴의 프로필 오른쪽에 `/home/admin`으로 이동하는 관리자 탭을 표시하며, 일반 계정은 기존 4개 탭을 유지한다. 기존 이메일 기반 스피드 매칭 시간 예외는 이번 로그인 전환 범위에서 유지한다.
-
-master 계정에는 하단 테스트 탭과 `/home/admin-test` 시각 샘플 대시보드를 추가로 제공한다. 이 페이지는 UI 상태 비교용 정적 샘플이며 실제 API 호출이나 데이터 변경을 하지 않는다.
-
-채팅 읽음과 친구 관련 NEW 상태는 로그인 사용자별로 독립 관리한다. 친구 알림은 받은 신청·스피드 결과·친구리스트·차단리스트 범주를 구분하며 각 상단 탭을 눌렀을 때 해당 범주만 확인 처리한다.
-
-사용자의 채팅 목록 삭제는 해당 사용자에게만 숨기며 상대방에게 알림하지 않는다. 채팅방과 메시지 원본은 삭제하지 않고, 삭제한 사용자는 새 메시지가 생성된 시점부터만 다시 본다.
-
-11. 다음 우선 작업
-
-우선순위가 높은 순서로 최대 3~5개만 유지한다.
-
-최상위 `nginx.md`를 운영 서버에 반영하여 활성 vhost·중복 server_name과 TLS 인증서 hostname mismatch를 해결하고 웹 `/`, `/api/health`, Socket.IO polling이 각각 TZChat HTML·health JSON·Engine.IO 응답을 반환하는지 확인한다.
-
-TZPhone API 키를 개발·운영 환경에 입력하고 실제 문자 수신, 신규·기존 전화 로그인, 설정·로그인 전 번호 변경을 통합 검증한다.
-
-별도 `tazocode-legal` 저장소에 정리된 공개 법적 문서와 `privacy.html#sensitive` 앵커를 반영·배포한다. 운영 배포 전 `NODE_ENV=production npm run seed:terms`로 고정 버전 약관 메타데이터 6개를 운영 DB에 초기화하고, 일반 계정·실제 Android/iOS 기기에서 필수 4개·선택 2개 가입 동의, 연락처 권한·동의·철회·ON/OFF, 두 성향 동의·편집·철회 흐름을 통합 검증한다.
-
-운영 백엔드에 저장소 외부 `FCM_SA_PATH`를 수동 반영한 뒤 Android/iOS 실기기 수신·갱신·클릭·OFF·로그아웃을 검증하고, 성공 후 미사용 직접 APNs 코드와 `APNS_*` 환경 설정을 제거한다.
-
-수신 가능한 일반 이메일로 설정의 이메일 추가·변경과 기존 이메일 계정 로그인을 실제 검증한다.
-
-12. 다음 작업 전 확인할 사항
-
-현재 Git 작업 트리의 사용자 변경사항
-
-관련된 history.md의 최근 결정
-
-tzadmin 참고가 필요한 구조 변경인지 여부
-
-실제 사용 가능한 테스트·빌드 명령
-
-운영 데이터, 인증, 배포에 미치는 영향
+├── tzchatapp/
+└── tzchatback/
+```
+
+- `tzchatapp`: Vue 3, TypeScript, Vite, Ionic 8, Capacitor 7, Pinia 클라이언트
+- `tzchatback`: Node.js 22 이상, Express 5, MongoDB/Mongoose 8 백엔드
+- `deploy/nginx/tzchat.conf`: 운영 Nginx 기준본
+- `legal`: 별도 공개 저장소에 반영하기 전의 검토용 법적 문서
+
+구조 참고 대상 `tzadmin`은 현재 공유 지침 문서 심볼릭 링크만 있고 비교할 실제 코드 트리가 없다. 따라서 현재 `tzchatapp` / `tzchatback` 경계를 이 프로젝트의 정식 구조로 유지한다.
+
+## 3. 실행 환경
+
+| 실행 형태 | 프론트 | 백엔드 | 상태 |
+| --- | --- | --- | --- |
+| 로컬 개발 | `http://localhost:11017` | `http://localhost:11018` | 코드·자동화 검증 완료 |
+| 서버 웹 | `https://tzchat.tazocode.com` | 동일 도메인 `/api`, `/socket.io`, `/uploads` | TLS·Web/API/Socket.IO 응답 정상, 최신 번들 배포 필요 |
+| Android/iOS | Capacitor 내장 번들 | 운영 HTTPS API | Android 로컬 서명 AAB·iOS Simulator unsigned Release 빌드 완료, 실기기·스토어 배포 미검증 |
+
+- 로컬은 각 프로젝트의 `.env.development`, 운영은 `.env.production`, 백엔드 자동화는 `.env.test` 하나씩만 사용한다.
+- 공통 `.env`는 사용하지 않고 실제 환경 파일과 자격증명은 Git에 커밋하지 않는다.
+- 운영 API Origin은 `https://tzchat.tazocode.com`이다. Capacitor의 `https://localhost`는 Android WebView Origin이지 API 주소가 아니다.
+- CORS는 개발 웹, 운영 웹, Android, iOS Origin을 환경별 exact allowlist로 검증한다.
+- 백엔드는 PM2 ecosystem으로만 production 실행하고 환경값은 백엔드 `.env.production`에서 로드한다.
+
+## 4. 실행·검증 명령
+
+### 프론트
+
+- 개발: `npm run dev`
+- 전체 테스트: `npm test`
+- 웹 빌드: `npm run build`
+- Android/iOS 자산 복사 포함: `npm run build:app`
+- 타입 검사와 production API·PWA 검증은 build에 포함된다.
+- 별도 lint 스크립트는 없다.
+
+### 백엔드
+
+- 개발: `npm run dev`
+- 전체 테스트: `npm test`
+- production 구문·환경 게이트: `npm run build`
+- 운영 실행/재적용: `npm run pm2:start`, `npm run pm2:reload`
+- 약관 메타데이터: `NODE_ENV=production npm run seed:terms`
+- 별도 lint 스크립트는 없다.
+
+## 5. 현재 기능·정책
+
+- 기본 가입·로그인은 전화번호 문자 인증이며, 이메일 인증은 기존 계정 호환과 인증정보 변경에 유지한다.
+- 필수 약관 4개, 선택 동의 2개, 유효한 만 19세 이상 나이, 성별을 서버와 클라이언트 메인 진입 게이트에서 확인한다.
+- 프로필, 일반 매칭, 매일 13~15시·21~23시 스피드 매칭, 친구, 채팅, 사용자별 미읽음·NEW 상태를 제공한다.
+- 연락처 지인 제외는 현재 동의 버전을 요구하고, 최대 2,000개의 64자리 SHA-256 hex만 소문자로 정규화·중복 제거해 저장하며 철회 시 해시를 삭제한다.
+- 민감정보 선택 동의는 구조화된 `preference`, `search_preference`에만 적용하고 철회 시 두 필드를 비운다.
+- 초기 출시는 무료 서비스다. 프론트 멤버십·결제 화면/API와 백엔드 membership/payment/point 설정·route·controller·service 구현은 제거했다.
+- 탈퇴 보존 정책에 필요한 `MembershipOrder`, `Payment` 모델과 모델 등록은 유지한다.
+- AdMob과 Firebase Analytics의 직접 사용·네이티브 연결은 제거했다. FCM 푸시와 필요한 Firebase Core/Messaging은 유지한다.
+
+## 6. 보안·UGC·계정 상태
+
+- HTTP JWT는 Authorization 또는 명시한 token header에서만 읽고 URL query token은 무시한다.
+- master 권한은 DB에서 로드한 `User.role=master`만 인정하고 request body·legacy 필드를 신뢰하지 않는다.
+- 보호 라우트는 공통 `authMiddleware`가 매 요청마다 DB 계정 상태를 확인하며 정지, 탈퇴 유예, 삭제 계정을 차단한다. 단, 탈퇴 유예 안내에 필요한 `/me`와 탈퇴 상태 조회·취소만 제한적으로 허용하고 온보딩·비밀번호·인증정보·개인 동의 변경은 차단한다.
+- Socket.IO는 handshake auth/header token 또는 검증된 세션만 허용하고 query token·익명 연결을 거부하며, 매 연결마다 사용자 DB 상태를 확인한다. 정지·탈퇴 신청 성공 시 해당 사용자의 기존 socket도 best-effort로 연결 해제한다.
+- legacy 관리자 로그인은 계정 존재 여부와 비밀번호 오류를 같은 401 응답으로 처리하고, 15분 동안 IP+아이디 5회·IP 전체 30회 실패 제한과 정수 `Retry-After`가 있는 429 응답을 적용한다.
+- 탈퇴 신청·상태·취소 API는 일관된 한국어 `code`·`message`·`error` 계약을 사용한다. 클라이언트는 탈퇴 유예 응답을 밝은 테마의 전용 안내 화면으로 보내고 정지·삭제 응답에서는 저장된 인증정보를 정리한 뒤 로그인 화면으로 이동한다.
+- UGC는 닉네임·소개·친구 신청·채팅 저장 전 허용 형식·길이·금지어를 검증한다.
+- 프로필·채팅 신고, 양방향 차단, master 신고 상태 처리·사용자 정지·해제·운영 로그가 구현되어 있다.
+- 탈퇴는 14일 유예 후 재시도 가능한 purge가 추가 데이터와 파일을 정리하고, 법적·운영 보존 대상은 분리한다.
+- master 전용 정적 `admin-test` 탭·route·페이지와 사용자 등급을 수정하던 hidden grade API·route·controller·service는 출시 표면에서 제거했다.
+
+## 7. 이미지 업로드
+
+- 애플리케이션 이미지 제한은 10MB, Nginx 요청 제한은 multipart overhead를 고려한 12MB이다.
+- 확장자·MIME·실제 decode 형식, 픽셀 상한, traversal을 검증하고 최종 JPEG로 재인코딩하며 실패 시 임시 파일을 정리한다.
+- 프로필 신규 업로드는 최대 2장이며, 사전 개수 검사와 원자적 DB 조건으로 동시 요청을 차단한다. 기존 3장 이상 데이터는 임의로 삭제하지 않는다.
+- `UPLOAD_ROOT`는 최종 저장소, `UPLOAD_TEMP_ROOT`는 임시 저장소다. 상세 기준은 `tzchatback/docs/deployment-environments.md`에 있다.
+
+## 8. 네이티브·PWA
+
+- Android/iOS/Capacitor 설치 표시명은 `손끝`이고 package/bundle ID는 `com.tazocode.tzchat`이다.
+- Capacitor WebView는 HTTPS scheme, `cleartext=false`, 밝은 테마 Keyboard style을 사용한다.
+- Android는 target/compile SDK 36, 연락처 읽기 권한만 사용하며 앱 데이터 cloud backup·device transfer를 차단한다.
+- 연락처 플러그인은 Capacitor 7 호환 `@capacitor-community/contacts` 7.2.0이며, iOS의 `limited`를 사용자가 선택한 연락처에 대한 부분 접근으로 허용한다. 7.2.0 네이티브 구현을 동기화한 Simulator 빌드에서 연락처 플러그인 경고 없이 컴파일된다.
+- Android/iOS/Web 푸시는 FCM registration token으로 통일했고, 알림 설정·무효 토큰 정리·허용된 딥링크를 서버와 클라이언트에서 검증한다.
+- PWA manifest는 standalone, 밝은 theme/background, 실제 PNG 아이콘을 사용한다. 서비스 워커는 검증된 MongoDB 채팅방 ID만 딥링크에 사용하고 운영 로그를 남기지 않는다.
+
+## 9. 파일·의존성 정리
+
+- 페이지·모달·필터는 `AllUsersPage`, `TargetSearchPage`, `SearchAgeRangeEditModal`, `SearchRegionsEditModal`, `SpeedMatchToggle`, `normalSearchFilter`, `speedSearchFilter` 등 역할 기반 영문 이름으로 정리했다.
+- 미참조 샘플·더미·오타 중복 파일과 빈 소스·테스트 디렉터리, Android 예제 테스트, 사용하지 않는 ESLint/Cypress 골격, 중복 Nginx 파일을 제거했다.
+- 중복되고 모델 경로가 잘못된 beta 전환 스크립트와 legacy 인증·탈퇴 차단 middleware를 제거했다. 유지하는 운영 마이그레이션·master 승격 도구는 기본 dry-run이며 실제 변경에는 명시적인 apply 또는 확인 문구가 필요하다.
+- 프론트·백엔드 package는 Node.js 22 이상을 명시하고 백엔드는 비공개 패키지(`private:true`)로 설정했다.
+- root 심볼릭 링크·`.DS_Store`를 정리했고, OS 잔여물·로컬 `tzadmin`·Android release 산출물은 Git에서 제외한다.
+- 실제 `.env` 파일, Android keystore·properties, 백엔드 서비스 계정 파일은 Git 비추적 상태다. Firebase Android/iOS 공개 클라이언트 설정은 앱 빌드에 필요한 추적 대상이다.
+- 프론트·백엔드 production 의존성 audit 결과는 각각 취약점 0개다.
+
+## 10. 운영 로그·공개 응답
+
+- production에서 프론트·백엔드 routine `log/info/debug`를 차단하고, warning/error는 토큰·이메일·전화번호·ID·IP·query·raw payload를 정제한다.
+- HTTP access 로그는 method, route path, status, duration만 남긴다.
+- `/api/health`는 `{"ok":true}`만 반환한다.
+- 공개 공지 상세는 `isPublished=true`를 DB 조회 조건에 강제하고, 비공개 포함 상세는 `requireMaster`로 보호된 `/manage/:id`에서만 조회한다.
+
+## 11. Nginx·외부 배포 상태
+
+- 운영 기준본은 `deploy/nginx/tzchat.conf`이다.
+- Nginx는 `/home/tazofarm/project/tzchat/tzchatapp/dist`를 직접 제공하고 `/api/`, `/socket.io/`, `/uploads/`를 `127.0.0.1:11018`로 전달하며 `/debug/`를 404로 차단한다.
+- HTTP→HTTPS, 12MB 요청 경계, SPA fallback, hashed asset immutable, index·manifest·service worker no-cache, `nosniff`·referrer·permissions·`SAMEORIGIN` 헤더가 기준본에 있다.
+- CSP와 HSTS는 호환성·서브도메인·롤백 위험을 실제 운영에서 확정하기 전이므로 아직 추가하지 않았다.
+- 외부 운영 도메인의 TLS, 웹, API, Socket.IO 응답은 정상이다.
+- 현재 외부 웹은 2026-08-15의 구 번들을 제공하여 어두운 테마와 구 PWA manifest가 노출된다. 최신 빌드와 Nginx 기준본 배포가 필요하다.
+
+## 12. 법적 문서
+
+다음 공개 문서 4개는 외부에서 HTTP 200을 반환한다.
+
+- `https://tazocode-dev.github.io/tazocode-legal/tzchat/terms.html`
+- `https://tazocode-dev.github.io/tazocode-legal/tzchat/privacy.html`
+- `https://tazocode-dev.github.io/tazocode-legal/tzchat/child-safety.html`
+- `https://tazocode-dev.github.io/tazocode-legal/tzchat/account-deletion.html`
+
+현재 배포된 `privacy.html`에는 앱이 선택 민감정보 동의에 사용하는 `#sensitive` 앵커가 없다. 검토본을 외부 법적 문서 저장소에 반영·배포해야 한다.
+
+## 13. 최종 검증 결과
+
+- 프론트 `npm test`: 28개 파일, 127개 테스트 통과
+- 프론트 `npm run build:app`: 511개 모듈 production 빌드·58개 파일 검사·Android/iOS 자산 복사 통과
+- Android 최신 `bundleRelease`: fail-closed 서명 설정으로 `tzchatapp/android/app/build/outputs/bundle/release/app-release.aab`(5.2MB) 생성, `jarsigner`의 `jar verified`와 `versionName=1.0.47`·`versionCode=47` 확인
+- iOS Simulator 최신 unsigned Release fresh build: 앱 `1.0.47`·build `47`과 Contacts framework 포함 확인
+- 백엔드 `npm test`: 234개 테스트 통과
+- 백엔드 `npm run build`: JavaScript 구문·production 환경 검증 통과
+- 프론트·백엔드 `npm audit --omit=dev`: 각각 취약점 0개
+- 프론트·백엔드 `npm ls`: 각각 종료 코드 0
+- 정적 release 검사와 `git diff --check`: 통과
+
+## 14. 미검증·남은 외부 작업
+
+- 최신 웹·백엔드·Nginx 기준본의 실제 운영 서버 반영
+- 실제 MongoDB·TZMail·TZPhone·FCM·APNs를 연결한 종단간 integration 테스트
+- Android/iOS 실기기의 가입·연락처·푸시·신고·차단·탈퇴 흐름
+- Android signed AAB의 Play Console 업로드·내부 테스트 설치와 스토어 서명 검증
+- iOS 실제 기기용 Release Archive·Distribution 서명과 App Store Connect·TestFlight 업로드
+- 스토어 Data safety·App Privacy·권한 설명·심사 계정·법적 URL 최종 검증
+- 운영 MongoDB·`UPLOAD_ROOT`·Nginx·release 자산의 백업·복구 연습
+
+## 15. 다음 우선작업
+
+1. 운영 DB·업로드·기존 설정을 백업한 후 최신 프론트·백엔드·`deploy/nginx/tzchat.conf`를 순서대로 배포한다.
+2. 외부 `privacy.html#sensitive`를 포함한 법적 문서 4개를 최신 검토본으로 반영하고 앱·약관 메타데이터 연결을 확인한다.
+3. Android/iOS 실기기에서 문자·이메일·FCM·연락처·가입·신고·차단·탈퇴 통합 흐름을 검증한다.
+4. 로컬에서 검증한 Android signed AAB를 내부 테스트 트랙에 올리고, iOS Archive를 Distribution 서명으로 생성해 TestFlight 설치본을 검증한다.
+5. 스토어 개인정보·데이터 보안·콘텐츠 등급·계정 삭제·심사 메타데이터를 현재 구현과 일치시킨다.

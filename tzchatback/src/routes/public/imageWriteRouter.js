@@ -11,14 +11,13 @@
 
 const express = require('express');
 
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/public/imageWrite.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion);
+router.use(authMiddleware);
 
-router.post('/profile/images', controller.upload.array('images', 10), controller.create);
+router.post('/profile/images', controller.uploadProfileImages, controller.create);
 router.delete('/profile/images/:id', controller.remove);
 
 module.exports = router;

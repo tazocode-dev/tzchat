@@ -9,6 +9,7 @@ const {
 } = require('@/services/sessionService');
 const { verifyCode } = require('@/services/auth/phoneVerificationService');
 const { getForcedPhoneRole } = require('@/config/phoneAuthPolicy');
+const { throwIfAccountRestricted } = require('@/services/auth/accountStatusService');
 
 class PhoneAuthError extends Error {
   constructor(status, code, message) {
@@ -81,16 +82,19 @@ async function findOrCreateUserByPhone(phone, dependencies = {}) {
   return { user, isNewUser };
 }
 
-async function verifyAndLogin({ phone, code }) {
-  const verified = await verifyCode({ phone, code });
-  const { user, isNewUser } = await findOrCreateUserByPhone(verified.phone);
+async function verifyAndLogin({ phone, code }, dependencies = {}) {
+  const verifyCodeFn = dependencies.verifyCodeFn || verifyCode;
+  const findUserFn = dependencies.findOrCreateUserByPhoneFn || findOrCreateUserByPhone;
+  const verified = await verifyCodeFn({ phone, code }, dependencies);
+  const { user, isNewUser } = await findUserFn(verified.phone, dependencies);
+  throwIfAccountRestricted(user, PhoneAuthError);
   user.last_login = new Date();
   await user.save().catch(() => {});
 
-  const token = signToken(user);
-  const refreshToken = signRefreshToken(user);
+  const token = (dependencies.signTokenFn || signToken)(user);
+  const refreshToken = (dependencies.signRefreshTokenFn || signRefreshToken)(user);
   const role = resolveRole(user);
-  const roles = Array.isArray(user.roles) ? user.roles : (role ? [role] : []);
+  const roles = role ? [role] : [];
   const isAdmin = resolveIsAdmin(user);
   return { user, isNewUser, token, refreshToken, role, roles, isAdmin, expiresIn: JWT_EXPIRES_IN };
 }

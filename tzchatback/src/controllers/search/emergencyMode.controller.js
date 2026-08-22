@@ -1,6 +1,6 @@
 // src/controllers/search/emergencyMode.controller.js
 // ────────────────────────────────────────────────────────────
-// Emergency 모드 컨트롤러: 인증 가드 + 요청 파싱 + 응답 조립.
+// Emergency 모드 컨트롤러: 요청 파싱 + 응답 조립.
 // 실제 로직은 services/search/emergencyModeService.js가 담당한다.
 // ────────────────────────────────────────────────────────────
 
@@ -13,17 +13,6 @@ function getAuthUserId(req) {
 }
 
 const p = (req) => (req.baseUrl || '') + (req.path || '');
-
-// ✅ 공용 인증 미들웨어: JWT 또는 세션 중 하나만 있어도 통과
-function ensureAuth(req, res, next) {
-  const userId = getAuthUserId(req);
-  if (userId) {
-    console.log('[AUTH][REQ]', { path: p(req), userId });
-    return next();
-  }
-  console.warn('[AUTH][ERR]', { path: p(req), step: 'ensureAuth', code: 'NO_LOGIN' });
-  return res.status(401).json({ ok: false, message: '로그인이 필요합니다.' });
-}
 
 // 🧹 만료 동기화 미들웨어(활성 중 만료되었으면 자동 OFF)
 async function syncEmergencyExpiration(req, _res, next) {
@@ -88,7 +77,7 @@ async function getList(req, res) {
   console.log('[API][REQ]', { path: p(req), method: 'GET', userId });
 
   try {
-    const result = await listActiveUsers(req?.user?.email);
+    const result = await listActiveUsers(req?.user?.email, userId);
     console.log('[API][EMERGENCY_LIST]', { path: p(req), count: result.users.length, duration: result.durationSeconds });
     console.timeEnd(label);
     console.log('[API][RES]', { path: p(req), status: 200 });
@@ -108,7 +97,7 @@ async function postFilter(req, res) {
 
   try {
     const { regions } = req.body || {};
-    const result = await filterActiveUsersByRegion(regions, req?.user?.email);
+    const result = await filterActiveUsersByRegion(regions, req?.user?.email, userId);
     console.log('[API][EMERGENCY_FILTER]', { path: p(req), count: result.users.length, duration: result.durationSeconds });
     console.timeEnd(label);
     console.log('[API][RES]', { path: p(req), status: 200 });
@@ -120,4 +109,4 @@ async function postFilter(req, res) {
   }
 }
 
-module.exports = { ensureAuth, syncEmergencyExpiration, putOn, putOff, getList, postFilter };
+module.exports = { syncEmergencyExpiration, putOn, putOff, getList, postFilter };

@@ -11,12 +11,11 @@
 // ------------------------------------------------------------
 
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/chat/friendRelation.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion, controller.requestLogger);
+router.use(authMiddleware, controller.requestLogger);
 
 router.get('/friends', controller.listFriends);
 router.delete('/friend/:id', controller.deleteFriend);

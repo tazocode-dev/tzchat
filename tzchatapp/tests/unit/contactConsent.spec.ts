@@ -4,7 +4,7 @@ import {
   ensureCurrentContactConsent,
   isOptionalConsentRequiredError,
 } from '@/features/profile/services/contactConsent'
-import profileSource from '@/features/profile/pages/6_profile.vue?raw'
+import profileSource from '@/features/profile/pages/MyProfilePage.vue?raw'
 
 function clientFor(options: { agreed?: boolean; version?: string } = {}) {
   const version = options.version || '2026-08-13-01'

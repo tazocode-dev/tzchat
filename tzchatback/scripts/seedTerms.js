@@ -4,6 +4,7 @@
 require('module-alias/register');
 
 const mongoose = require('mongoose');
+const { safeErrorDetails } = require('./scriptSafety');
 
 const LEGAL_PUBLIC_BASE_URL = 'https://tazocode-dev.github.io/tazocode-legal/tzchat/';
 const AGREEMENT_VERSION = '2026-08-13-01';
@@ -96,7 +97,7 @@ async function main() {
     await seedAgreementMetadata(Terms);
     console.log('🎉 Agreement metadata seed completed');
   } catch (error) {
-    console.error('❌ Seed error:', error);
+    console.error('❌ Seed error:', safeErrorDetails(error));
     process.exitCode = 1;
   } finally {
     await mongoose.disconnect();

@@ -186,4 +186,23 @@ describe('native runtime permission flows', () => {
     expect(mocks.contactsRequest).toHaveBeenCalledTimes(1)
     expect(mocks.contactsGet).not.toHaveBeenCalled()
   })
+
+  test('iOS 연락처 limited 권한은 부분 접근으로 인정해 선택된 연락처를 읽는다', async () => {
+    mocks.platform = 'ios'
+    mocks.contactsCheck.mockResolvedValue({ contacts: 'limited' })
+    mocks.contactsGet.mockResolvedValue({ contacts: [{ phones: [{ number: '01012345678' }] }] })
+
+    await expect(getNativeContactPhoneNumbers()).resolves.toEqual(['01012345678'])
+    expect(mocks.contactsRequest).not.toHaveBeenCalled()
+    expect(mocks.contactsGet).toHaveBeenCalledTimes(1)
+  })
+
+  test('Android의 알 수 없는 limited 권한은 허용하지 않는다', async () => {
+    mocks.platform = 'android'
+    mocks.contactsCheck.mockResolvedValue({ contacts: 'limited' })
+
+    await expect(getNativeContactPhoneNumbers()).rejects.toBeInstanceOf(NativeContactsPermissionError)
+    expect(mocks.contactsRequest).not.toHaveBeenCalled()
+    expect(mocks.contactsGet).not.toHaveBeenCalled()
+  })
 })

@@ -2,7 +2,7 @@
 // -------------------------------------------------------------
 // ✅ Firebase Admin 초기화 (서버에서 FCM 발송용)
 // - 설치/키파일 이슈가 있어도 서버가 죽지 않도록 방어
-// - 중복 초기화 방지(firebaseAdmin.apps.length 체크)
+// - 중복 초기화 방지(getApps() 체크)
 // - 환경변수 FCM_SA_PATH로 지정한 파일만 지원
 // -------------------------------------------------------------
 const { validateFcmServiceAccountPath } = require('@/config/fcmServiceAccountPath');
@@ -12,8 +12,8 @@ let initialized = false;
 
 try {
   // 설치 안되어 있으면 여기서만 실패 → 서버는 계속 동작
-  // eslint-disable-next-line import/no-extraneous-dependencies
-  const firebaseAdmin = require('firebase-admin');
+  const { cert, getApps, initializeApp } = require('firebase-admin/app');
+  const { getMessaging } = require('firebase-admin/messaging');
 
   // 1) 서비스 계정 로딩: 명시적으로 지정된 파일 경로만 허용
   let credentialObj = null;
@@ -26,15 +26,18 @@ try {
   }
 
   // 2) 중복 초기화 방지
-  if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
-    firebaseAdmin.initializeApp({
-      credential: firebaseAdmin.credential.cert(credentialObj),
+  let app = getApps()[0];
+  if (!app) {
+    app = initializeApp({
+      credential: cert(credentialObj),
       // 필요 시 projectId 명시 가능:
       // projectId: process.env.GOOGLE_CLOUD_PROJECT || credentialObj.project_id,
     });
   }
 
-  admin = firebaseAdmin;
+  const messaging = getMessaging(app);
+  // sender와 테스트의 기존 주입 계약을 유지하는 최소 어댑터다.
+  admin = { messaging: () => messaging };
   initialized = true;
 
   // 경로/환경정보는 민감하니 상세 경로는 로그에 노출하지 않음

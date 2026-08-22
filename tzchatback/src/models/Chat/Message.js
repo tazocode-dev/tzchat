@@ -35,7 +35,7 @@ const messageSchema = new Schema({
   type: { type: String, enum: ['text', 'image'], default: 'text' },
 
   // 텍스트 메시지 내용
-  content: { type: String, default: '' },
+  content: { type: String, trim: true, maxlength: 2000, default: '' },
 
   // 이미지 메시지 URL(또는 경로)
   imageUrl: { type: String, default: '' },

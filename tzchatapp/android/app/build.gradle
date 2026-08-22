@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-// app/build.gradle  (릴리스 서명 설정 + Firebase SDK 추가)
+// app/build.gradle  (릴리스 서명 설정)
 // - 기존 내용 최대한 유지
 // - keystore.properties 읽어서 release 서명 적용
 // - google-services.json 존재 시 플러그인 자동 적용 (로그로 확인 가능)
@@ -10,22 +10,51 @@ apply plugin: 'com.android.application'
 // [ADD] 안전용 import (일부 환경에서 필요)
 import java.util.Properties
 import java.io.FileInputStream
+import java.util.Locale
 
 // [ADD] keystore.properties 로드 (Git에 올리지 않는 비밀 파일)
 // 권장 경로: android/keystore/keystore.properties
 // 예시 내용:
-//   storeFile=android/keystore/tzchat-release.keystore
+//   storeFile=keystore/tzchat-release.keystore
 //   storePassword=비밀번호
 //   keyAlias=tzchat
 //   keyPassword=비밀번호
 def keystorePropertiesFile = rootProject.file("keystore/keystore.properties")
 def keystoreProperties = new Properties()
+def releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.toLowerCase(Locale.ROOT).contains("release")
+}
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-    logger.lifecycle("🔐 keystore.properties 로드 완료: ${keystorePropertiesFile}")
-} else {
-    logger.lifecycle("⚠️ keystore.properties 를 찾지 못했습니다. release 빌드 시 서명되지 않을 수 있습니다.")
 }
+
+def requiredSigningProperties = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+if (releaseTaskRequested) {
+    if (!keystorePropertiesFile.exists()) {
+        throw new GradleException("Release signing configuration is missing: keystore.properties is required.")
+    }
+
+    def missingSigningProperties = requiredSigningProperties.findAll { propertyName ->
+        !keystoreProperties.getProperty(propertyName)?.trim()
+    }
+    if (!missingSigningProperties.isEmpty()) {
+        throw new GradleException(
+            "Release signing configuration is incomplete: ${missingSigningProperties.join(', ')} must be set."
+        )
+    }
+
+    def releaseKeystoreFile = rootProject.file(keystoreProperties.getProperty('storeFile').trim())
+    if (!releaseKeystoreFile.isFile()) {
+        throw new GradleException("Release signing configuration is invalid: the configured keystore file does not exist.")
+    }
+}
+
+def hasCompleteSigningConfiguration = requiredSigningProperties.every { propertyName ->
+    keystoreProperties.getProperty(propertyName)?.trim()
+}
+def configuredKeystoreFile = hasCompleteSigningConfiguration
+    ? rootProject.file(keystoreProperties.getProperty('storeFile').trim())
+    : null
 
 android {
     namespace "com.tazocode.tzchat"
@@ -37,10 +66,8 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
 
         // ✅ 스토어 업로드 핵심: 업로드할 때마다 versionCode는 1,2,3… 증가
-        versionCode 44
-        versionName "1.0.44"
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        versionCode 47
+        versionName "1.0.47"
 
         aaptOptions {
             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -51,21 +78,14 @@ android {
     // [ADD] 릴리스 서명 정보
     signingConfigs {
         release {
-            if (keystoreProperties['storeFile']) {
-                // ⬇⬇⬇ 상대경로 오해 방지: 프로젝트 루트 기준으로 해석
-                def ksFile = rootProject.file(keystoreProperties['storeFile'])
-                logger.lifecycle("🔍 Using keystore at: ${ksFile}")
-                if (!ksFile.exists()) {
-                    logger.lifecycle("❌ Keystore NOT found at: ${ksFile}")
-                    // throw new GradleException("Keystore not found at: ${ksFile}")
+            if (configuredKeystoreFile?.isFile()) {
+                storeFile configuredKeystoreFile
+                storePassword keystoreProperties.getProperty('storePassword').trim()
+                keyAlias keystoreProperties.getProperty('keyAlias').trim()
+                keyPassword keystoreProperties.getProperty('keyPassword').trim()
+                if (releaseTaskRequested) {
+                    logger.lifecycle("✅ release signingConfig 검증 및 적용 완료")
                 }
-                storeFile ksFile
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
-                logger.lifecycle("✅ release signingConfig 적용됨 (storeFile=${ksFile})")
-            } else {
-                logger.lifecycle("⚠️ release signingConfig: storeFile 미설정 → 무서명 빌드 가능성")
             }
         }
     }
@@ -104,24 +124,10 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
-    testImplementation "junit:junit:$junitVersion"
-    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
-    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
 
-    // 🔽 [ADD] Firebase BoM 및 필요한 SDK들
-    // BoM을 쓰면 하위 Firebase 의존성의 버전은 지정하지 않습니다.
-    implementation platform('com.google.firebase:firebase-bom:34.3.0')
-
-    // 사용 목적에 따라 필요한 것만 선택하세요:
-    implementation 'com.google.firebase:firebase-analytics'   // 앱 분석
-    implementation 'com.google.firebase:firebase-messaging'   // 푸시 알림(FCM)
-    // implementation 'com.google.firebase:firebase-auth'     // (선택) 전화번호/구글 로그인 등 Auth 사용 시
-    // implementation 'com.google.firebase:firebase-crashlytics' // (선택) 크래시 리포트
-
-    // ✅ (삭제/비활성) @capawesome/capacitor-app-update 플러그인 사용 시 불필요/중복 가능
-    // MainActivity에서 Play Core(import com.google.android.play.core...)를 직접 쓰지 않을 거면 넣지 마세요.
-    // implementation 'com.google.android.play:app-update:2.1.0'
+    // FCM은 @capacitor/push-notifications 플러그인이 제공한다.
+    // 앱 모듈에서 Firebase BoM/Analytics/Messaging을 다시 선언하지 않는다.
 }
 
 apply from: 'capacitor.build.gradle'

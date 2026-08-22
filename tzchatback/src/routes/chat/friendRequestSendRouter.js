@@ -8,12 +8,11 @@
 // - DELETE /friend-request/:id       : 신청 취소
 // ------------------------------------------------------------
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/chat/friendRequestSend.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion, controller.requestLogger);
+router.use(authMiddleware, controller.requestLogger);
 
 router.post('/friend-request', controller.postFriendRequest);
 router.post('/friend-request-speed', controller.postFriendRequestSpeed);

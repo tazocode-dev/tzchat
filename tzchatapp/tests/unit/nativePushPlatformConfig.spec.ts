@@ -34,6 +34,7 @@ describe('native push platform configuration', () => {
   test('Android는 공식 Capacitor FCM 플러그인과 Android 13 권한·기본 채널을 유지한다', () => {
     const packageJson = JSON.parse(read('package.json'))
     const capacitorGradle = read('android/app/capacitor.build.gradle')
+    const pushPluginGradle = read('node_modules/@capacitor/push-notifications/android/build.gradle')
     const buildGradle = read('android/app/build.gradle')
     const manifest = read('android/app/src/main/AndroidManifest.xml')
     const googleServices = JSON.parse(read('android/app/google-services.json'))
@@ -44,7 +45,8 @@ describe('native push platform configuration', () => {
     expect(packageJson.dependencies?.['@capacitor/push-notifications']).toBeTruthy()
     expect(capacitorGradle).toContain("implementation project(':capacitor-push-notifications')")
     expect(buildGradle).toContain("apply plugin: 'com.google.gms.google-services'")
-    expect(buildGradle).toContain("implementation 'com.google.firebase:firebase-messaging'")
+    expect(buildGradle).not.toMatch(/implementation\s+['"]com\.google\.firebase:firebase-(?:analytics|messaging)/)
+    expect(pushPluginGradle).toContain('com.google.firebase:firebase-messaging')
     expect(manifest).toContain('android.permission.POST_NOTIFICATIONS')
     expect(manifest).toContain('com.google.firebase.messaging.default_notification_channel_id')
     expect(manifest).toContain('android:value="tzchat_alerts_v2"')

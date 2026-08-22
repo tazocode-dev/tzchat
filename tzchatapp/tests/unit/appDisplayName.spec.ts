@@ -43,12 +43,11 @@ describe('사용자 표시명', () => {
     expect(topPoint).toContain('<strong>손끝</strong>')
   })
 
-  test('사용자 문의, 신고, 멤버십, 이메일과 푸시 제목이 손끝이다', () => {
+  test('사용자 문의, 신고, 이메일과 푸시 제목이 손끝이다', () => {
     const userFacingSources = [
-      read('src/features/settings/pages/7_setting.vue'),
-      read('src/features/profile/pages/PageuserProfile.vue'),
-      read('src/features/profile/pages/PagepremiumProfile.vue'),
-      read('src/features/membership/Buy.vue'),
+      read('src/features/settings/pages/SettingsPage.vue'),
+      read('src/features/profile/pages/UserProfilePage.vue'),
+      read('src/features/profile/pages/SpeedUserProfilePage.vue'),
       readBackend('src/services/push/sender.js'),
       readBackend('src/services/auth/emailVerificationService.js'),
       readBackend('src/services/auth/accountVerificationService.js'),
@@ -57,7 +56,6 @@ describe('사용자 표시명', () => {
     expect(userFacingSources.join('\n')).not.toContain('TZChat')
     expect(userFacingSources.join('\n')).toContain('손끝 문의드립니다')
     expect(userFacingSources.join('\n')).toContain('손끝 사용자 신고')
-    expect(userFacingSources.join('\n')).toContain('손끝 멤버십')
     expect(userFacingSources.join('\n')).toContain('손끝 알림')
     expect(userFacingSources.join('\n')).toContain('손끝 이메일 인증번호')
   })

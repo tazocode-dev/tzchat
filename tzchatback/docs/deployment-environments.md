@@ -1,91 +1,107 @@
-# TZChat 환경 분리 및 서버 반영
+# TZChat 배포 환경과 운영 반영
 
-## 환경 파일 역할
+## 기준
 
-백엔드는 `NODE_ENV`가 먼저 결정된 뒤 해당 환경 파일 하나만 읽습니다.
+- Node.js 22 이상을 사용합니다.
+- 프론트 서버 경로는 `/home/tazofarm/project/tzchat/tzchatapp`입니다.
+- 백엔드 서버 경로는 `/home/tazofarm/project/tzchat/tzchatback`입니다.
+- 운영 도메인은 `https://tzchat.tazocode.com`, 백엔드 loopback 포트는 `11018`입니다.
+- Nginx 기준본은 저장소 루트의 `deploy/nginx/tzchat.conf`입니다. 이 파일은 설정 문법만 포함하며 실제 설치 명령은 이 문서에서 관리합니다.
 
-- 개발: `.env.development`
-- 운영: `.env.production`
-- 자동화 테스트 런타임: `.env.test`
-- 공통 `.env`는 사용하지 않습니다. 선택된 환경 파일이 없으면 다른 파일로 대체하지 않고 기동을 중단합니다.
-- 셸과 PM2에 직접 지정한 환경변수는 선택된 파일보다 우선합니다.
+## 환경 파일
 
-`.env.development`와 `.env.production`은 각각 DB, JWT·세션, Origin, TZMail·TZPhone, 계정 정책, 푸시 설정을 포함하는 완결된 파일입니다. 한 환경의 값을 다른 환경 파일에 의존시키지 않습니다.
+백엔드는 `NODE_ENV`가 먼저 결정된 후 해당 환경 파일 하나만 읽습니다.
 
-서버에 수동 복사할 파일:
+| 환경 | 프론트 | 백엔드 |
+| --- | --- | --- |
+| 개발 | `tzchatapp/.env.development` | `tzchatback/.env.development` |
+| 운영 | `tzchatapp/.env.production` | `tzchatback/.env.production` |
+| 자동화 테스트 | 명령에서 필요값 주입 | `tzchatback/.env.test` |
 
-- `tzchatback/.env.production`: 운영 백엔드 설정 전체. 비밀 파일로 취급합니다.
-- `tzchatapp/.env.production`: Vite 빌드에 포함되는 공개 설정만 허용
+- 공통 `.env`는 사용하지 않습니다. 선택된 환경 파일이 없으면 다른 파일로 대체하지 않고 실행을 중단합니다.
+- 셸·PM2가 직접 지정한 값은 환경 파일보다 우선합니다.
+- `*.example`은 작성 기준일 뿐 실행 파일이 아닙니다.
+- `VITE_` 값은 번들에 공개되므로 비밀값을 넣지 않습니다.
+- DB URI, JWT·세션 secret, TZMail·TZPhone·FCM·APNs 자격증명은 백엔드 운영 환경에서만 관리하고 Git에 커밋하지 않습니다.
 
-서버에 복사하지 않을 파일:
+## 업로드 저장소와 크기 경계
 
-- `tzchatback/.env.development`
-- `tzchatback/.env.test`
-- `tzchatapp/.env.development`
-- 모든 `*.example` 파일은 작성 기준일 뿐 실제 실행 파일로 복사하지 않습니다.
+백엔드의 이미지 업로드 제한은 10MB입니다. Nginx의 `client_max_body_size`는 12MB로 두어 multipart overhead를 허용하되, 애플리케이션의 10MB JSON 오류 응답 경계를 바꾸지 않습니다.
 
-`VITE_` 변수는 앱 번들에 포함되므로 API 키나 비밀번호를 넣지 않습니다. 실제 비밀 환경 파일은 Git에 커밋하지 않습니다.
+- `UPLOAD_ROOT`
+  - 최종 프로필·채팅 이미지 저장소입니다.
+  - 비어 있으면 `tzchatback/uploads`를 사용합니다.
+  - 릴리스 교체 중에도 유지되는 절대경로를 운영 환경 파일에 명시하는 것을 권장합니다.
+- `UPLOAD_TEMP_ROOT`
+  - Multer 임시 파일 저장소입니다.
+  - 비어 있으면 OS 임시 디렉터리 아래 `tzchat-upload-temp`를 사용합니다.
+  - 지정할 경우 백엔드 서비스 계정이 쓰고 정리할 수 있는 절대경로를 사용합니다.
 
-TZMail·TZPhone API 키와 테스트 계정 로그인 고정 인증번호는 해당 백엔드 환경 파일에서만 관리하고 문서나 프론트 환경 파일에 넣지 않습니다. 운영 필수 설정이 비어 있으면 배포 검사가 의도적으로 실패합니다.
+예시 경로이며 실제 서버 권한·백업 정책에 맞게 결정합니다.
 
-## 개발 실행
+```dotenv
+UPLOAD_ROOT=/home/tazofarm/data/tzchat/uploads
+UPLOAD_TEMP_ROOT=/home/tazofarm/data/tzchat/upload-temp
+```
+
+저장소는 서비스 실행 전에 생성하고, 백엔드 서비스 계정에만 필요한 읽기·쓰기 권한을 부여합니다. `UPLOAD_ROOT`는 DB와 함께 백업·복구 대상으로 관리하고, 임시 디렉터리는 백업하지 않습니다.
+
+## 로컬 개발·검증
 
 ```bash
 cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatback
+npm ci
 npm run dev
 
 cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatapp
+npm ci
 npm run dev
 ```
 
-개발 웹은 `http://localhost:11017`, 개발 API는 `http://localhost:11018`만 사용합니다. 일반 이메일은 `MAIL_PROVIDER=tzmail`, `TZMAIL_BASE_URL=https://tzmail.tazocode.com/api`, `EMAIL_CODE_FIXED=false`로 실제 TZMail 발송을 사용합니다. 문자도 `SMS_PROVIDER=tzphone`, `TZPHONE_BASE_URL=https://tzphone.tazocode.com/api`로 실제 TZPhone 발송을 사용하며 mock은 자동화 테스트에서만 허용합니다.
-
-## 약관 동의 메타데이터 초기화
-
-공개 법적 본문은 GitHub Pages에서만 제공하고, DB에는 현재 가입 동의 판정에 필요한 고정 버전 메타데이터와 사용자 동의 기록만 저장합니다. 서버 시작 시 자동 실행하지 않으며 운영자가 대상 환경을 명시해 실행합니다.
+개발 주소는 프론트 `http://localhost:11017`, API `http://localhost:11018`입니다. 전체 검증 명령은 다음과 같습니다.
 
 ```bash
-# 로컬 개발 DB
-cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatback
-NODE_ENV=development npm run seed:terms
+cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatapp
+npm test
+npm run build:app
 
-# 운영 DB
-cd /home/tazofarm/project/tzchat/tzchatback
-NODE_ENV=production npm run seed:terms
+cd /Users/mac/tazocode/11017_tzchat/tzchat/tzchatback
+npm test
+npm run build
 ```
 
-명령은 선택한 `.env.<NODE_ENV>`의 `MONGO_URI`를 사용하며 URI를 출력하지 않습니다. 같은 `slug`와 고정 버전을 upsert하고 해당 slug의 다른 활성 버전만 비활성화하므로 같은 환경에서 반복 실행해도 문서가 중복 생성되거나 버전이 매번 바뀌어 불필요한 재동의가 발생하지 않습니다. 실행 전 `NODE_ENV`와 대상 환경 파일이 올바른 DB를 가리키는지 확인해야 합니다.
+## 운영 반영 순서
 
-## 운영 배포 전 검사
+배포 전 [출시 체크리스트](../../RELEASE_CHECKLIST.md)의 백업·롤백 항목을 먼저 완료합니다.
+
+### 1. 의존성과 프론트 빌드
 
 ```bash
 cd /home/tazofarm/project/tzchat/tzchatapp
 npm ci
-npm run build
-
-cd /home/tazofarm/project/tzchat/tzchatback
-npm ci --omit=dev
+npm test
 npm run build
 ```
 
-백엔드의 `npm run build`는 컴파일하거나 `dist` 산출물을 만들지 않습니다. 전체 JavaScript 구문과 운영 환경설정을 검사하는 배포 전 검사이므로, 운영 서버에는 `src`, `scripts`, `package.json`, `package-lock.json` 등 백엔드 실행 소스를 그대로 배포해야 합니다.
+`npm run build`는 앱 버전, production API Origin, TypeScript, Vite 번들, PWA 파일을 검증합니다. Nginx는 생성된 `/home/tazofarm/project/tzchat/tzchatapp/dist`를 직접 제공합니다.
 
-운영 빌드는 잘못된 CORS, 클라이언트용 로컬·사설 API 주소, 폐기된 공개 URL 키, `MAIL_PROVIDER=dev`, `EMAIL_CODE_FIXED=true`, 등록값과 다른 TZMail 앱 ID, 잘못된 API 키 형식, 필수 TZMail·TZPhone 설정 누락을 거부합니다. 공개 미디어 URL은 `PUBLIC_API_ORIGIN`만 사용합니다. 배포 전 검사는 운영 서버 외부의 `FCM_SA_PATH` 파일이 로컬에 없어도 허용하지만, 실제 production 서버는 시작 전에 해당 파일의 존재와 읽기 권한을 확인하고 실패 시 기동하지 않습니다. TZMail과 같은 서버의 운영 백엔드는 `TZMAIL_BASE_URL=http://127.0.0.1:10024/api`를 사용합니다.
+### 2. 백엔드 검증·약관·PM2
 
-## 이메일 인증 구조와 장애 확인
+```bash
+cd /home/tazofarm/project/tzchat/tzchatback
+npm ci --omit=dev
+npm test
+npm run build
+NODE_ENV=production npm run seed:terms
+npm run pm2:reload
+```
 
-- 웹과 Android/iOS 앱은 모두 TZChat 백엔드의 `/api/auth/email/*`만 호출합니다. TZMail 앱 ID와 API 키는 프론트 번들에 포함하지 않습니다.
-- 정확히 지정된 심사용 이메일의 로그인 요청만 `sent=false`, `reviewLogin=true`로 응답하고 실제 메일을 발송하지 않습니다. 이메일 변경·전화번호 변경 인증에는 이 우회를 적용하지 않습니다.
-- 일반 이메일은 임의의 6자리 번호를 생성해 TZMail 발송 성공 뒤 `sent=true`로 응답합니다.
-- `devCode`는 `NODE_ENV=test`와 `MAIL_PROVIDER=dev`가 함께 설정된 자동화 테스트에서만 반환됩니다.
+- 최초 PM2 반영은 `npm run pm2:start`, 이후 코드·환경 변경은 `npm run pm2:reload`를 사용합니다.
+- 과거에 직접 실행한 PM2 프로세스가 남아 있다면 최초 1회는 기존 `tzchatback`을 삭제하고 ecosystem으로 재생성합니다.
+- `npm run build`는 백엔드 산출물을 만들지 않고 전체 JavaScript 구문과 production 환경 제약을 검증합니다.
+- `seed:terms`는 해당 환경 DB의 고정 버전 메타데이터를 upsert합니다. 실행 전 DB 대상을 확인합니다.
 
-502를 확인할 때는 먼저 TZChat의 `/api/health`와 TZMail의 `/api/health`를 각각 확인합니다. 그다음 제한된 백엔드 로그에서 `network_error`, `timeout`, `delivery_rejected`, `providerCode`를 확인합니다. TZMail health가 정상이더라도 메일 요청만 실패하면 Nginx로 단정하지 말고 앱 ID·활성 키·메일 공급자 거부 응답을 먼저 확인합니다.
-
-## PM2 반영
-
-PM2는 반드시 ecosystem 파일로 실행합니다. `pm2 start src/server.js` 또는 `pm2 start npm -- start`처럼 직접 실행하면 운영 검증에서 거부됩니다.
-
-공통 `.env`와 ecosystem 중복 설정을 사용하던 기존 PM2 프로세스에는 과거 환경값이 남을 수 있습니다. 이 구조를 처음 반영할 때는 한 번만 기존 프로세스를 삭제하고 ecosystem으로 다시 생성합니다.
+최초 ecosystem 전환이 필요한 경우에만 다음을 수행합니다.
 
 ```bash
 pm2 delete tzchatback
@@ -94,34 +110,55 @@ npm run pm2:start
 pm2 save
 ```
 
-신규 서버 최초 실행:
+### 3. Nginx 기준본 반영
 
 ```bash
-cd /home/tazofarm/project/tzchat/tzchatback
-npm run pm2:start
-pm2 save
-```
-
-코드와 환경 변경 후 무중단 반영:
-
-```bash
-cd /home/tazofarm/project/tzchat/tzchatback
-npm run build
-npm run pm2:reload
-```
-
-PM2 ecosystem에는 `NODE_ENV`와 ecosystem 실행 표식만 둡니다. 애플리케이션 설정은 모두 `.env.production`에서 관리합니다.
-
-환경 오류로 기동 직후 종료되면 PM2는 짧은 재시작을 최대 5회로 제한합니다.
-
-## 반영 후 확인
-
-```bash
-curl -fsS https://tzchat.tazocode.com/api/health
+cd /home/tazofarm/project/tzchat
+sudo install -m 0644 deploy/nginx/tzchat.conf /etc/nginx/sites-available/tzchat.conf
+sudo ln -sfn /etc/nginx/sites-available/tzchat.conf /etc/nginx/sites-enabled/tzchat.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-`pm2 env` 전체 출력은 비밀값을 노출할 수 있으므로 사용하지 않습니다. 상태 확인에는 `pm2 status tzchatback`과 제한된 애플리케이션 로그만 사용합니다.
+`nginx -t`가 실패하면 reload하지 않고 이전 활성 설정을 유지합니다. 기준본은 다음을 강제합니다.
 
-운영 Nginx 기준본은 프로젝트 최상위 `nginx.md`이며, `/debug/`는 백엔드 proxy 대상으로 두지 않습니다.
+- HTTP 80을 HTTPS 443으로 redirect
+- `tzchatapp/dist` SPA 직접 제공
+- `/api/`, `/socket.io/`, `/uploads/`를 `127.0.0.1:11018`로 proxy
+- `/debug/` 404
+- Nginx default access log off(질의·식별자가 포함된 중복 요청 로그 방지), 백엔드의 정제된 API access 로그 사용
+- hashed `/assets/` immutable cache
+- `index.html`, `manifest.webmanifest`, `firebase-messaging-sw.js` no-cache
+- `nosniff`, referrer, permissions, `SAMEORIGIN` 보안 헤더
+
+CSP는 현재 Ionic·법적 문서 iframe·외부 연결을 실기기에서 완전히 검증하지 않아 출시 기준본에 추가하지 않았습니다. HSTS도 하위 도메인·인증서·롤백 정책을 운영에서 확정하기 전이므로 추가하지 않았습니다.
+
+## 반영 후 확인
+
+```bash
+node --version
+pm2 status tzchatback
+curl -fsS https://tzchat.tazocode.com/api/health
+curl -fsS 'https://tzchat.tazocode.com/socket.io/?EIO=4&transport=polling'
+curl -fsSI https://tzchat.tazocode.com/
+curl -fsSI https://tzchat.tazocode.com/manifest.webmanifest
+curl -fsSI https://tzchat.tazocode.com/firebase-messaging-sw.js
+```
+
+기대 결과:
+
+- health body는 `{"ok":true}`입니다.
+- Socket.IO polling은 HTML이 아닌 Engine.IO open packet을 반환합니다.
+- 웹 루트와 manifest는 최신 `손끝` 밝은 테마·PNG 아이콘 설정입니다.
+- `manifest.webmanifest`, `firebase-messaging-sw.js`, `index.html`은 no-cache이고 hashed assets는 immutable입니다.
+- `https://tzchat.tazocode.com/debug/`는 404입니다.
+
+`pm2 env`의 전체 출력은 비밀값을 노출할 수 있으므로 사용하지 않습니다. PM2 상태와 production에서 정제된 애플리케이션 로그만 확인합니다.
+
+## 롤백
+
+1. 배포 전 보존한 이전 commit·lockfile·`dist`로 코드와 프론트 자산을 복구합니다.
+2. 백엔드 의존성을 이전 lockfile로 재설치하고 `npm run build` 후 PM2를 reload합니다.
+3. Nginx 변경이 원인이면 이전 vhost를 복구하고 `sudo nginx -t` 통과 후 reload합니다.
+4. 데이터 복구는 스키마·약관 메타데이터 호환성을 확인한 후에만 수행합니다.
+5. 롤백 후 웹, health, Socket.IO, 로그인, 업로드 이미지, 푸시를 다시 점검합니다.

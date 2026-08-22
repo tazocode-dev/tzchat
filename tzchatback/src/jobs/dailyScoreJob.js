@@ -59,7 +59,8 @@ async function computeAggForDay(ymd) {
   const frRecvMap = new Map(frRecvAgg.map(a => [String(a._id), a.cnt]));
   const frAccMap = new Map(frAcceptedAgg.map(a => [String(a._id), a.cnt]));
 
-  // TODO: blocksDone 집계가 필요하면 Block 모델/로그 기준으로 추가
+  // 차단은 별도 일자 이벤트 모델이 없어 일일 점수에는 반영하지 않는다.
+  // 서비스 접근·노출 차단 정책에서 강제하며 blocksDone은 스키마 호환을 위해 0으로 유지한다.
 
   for (const u of users) {
     const uid = String(u._id);
@@ -67,7 +68,7 @@ async function computeAggForDay(ymd) {
       user: u._id,
       ymd,
       messagesSent: msgSentMap.get(uid) || 0,
-      messagesRecv: 0, // 필요시 메시지 수신 추정 로직 추가
+      messagesRecv: 0, // 현재 점수 산식에서 사용하지 않으며 스키마 호환을 위해 0 유지
       friendReqSent: frSentMap.get(uid) || 0,
       friendReqRecv: frRecvMap.get(uid) || 0,
       friendReqAccepted: frAccMap.get(uid) || 0,

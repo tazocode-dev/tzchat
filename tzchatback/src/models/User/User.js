@@ -82,13 +82,16 @@ const userSchema = new mongoose.Schema(
     // [0] 권한/상태
     role: { type: String, enum: ['user', 'master'], default: 'user' },
     suspended: { type: Boolean, default: false },
+    suspendedReason: { type: String, trim: true, maxlength: 300, default: '' },
+    suspendedAt: { type: Date, default: null },
+    suspendedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // [1] 기본 정보
     // ✅ 이메일 인증 전환: username/password는 더 이상 신규가입 필수 항목이 아니다
     //    (기존 아이디-비밀번호 계정과의 호환을 위해 필드 자체는 유지, 관리자 로그인도 계속 사용)
     username: { type: String, required: false, default: undefined, trim: true },
     password: { type: String, required: false, select: false, default: undefined },
-    nickname: { type: String, required: true },
+    nickname: { type: String, required: true, trim: true, maxlength: 20 },
     birthyear: Number,
     // 기존 생년월일 저장 계정 호환용이다. 신규 온보딩은 birthyear만 저장한다.
     birthDate: { type: Date, default: null },
@@ -103,7 +106,7 @@ const userSchema = new mongoose.Schema(
     region1: { type: String, default: '미지정' },
     region2: { type: String, default: '미지정' },
     preference: { type: String, default: '' },
-    selfintro: { type: String, default: '' },
+    selfintro: { type: String, trim: true, maxlength: 500, default: '' },
 
     profileImages: { type: [ProfileImageSchema], default: [] },
     profileMain:   { type: String, default: '' },

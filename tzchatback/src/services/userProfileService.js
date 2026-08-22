@@ -5,6 +5,7 @@
 
 const { User } = require('@/models');
 const { requireCurrentActiveOptIn } = require('@/services/legal/termsPublicService');
+const { validateUserGeneratedText } = require('@/services/system/ugcContentPolicyService');
 
 class ProfileError extends Error {
   constructor(status, message) {
@@ -14,8 +15,7 @@ class ProfileError extends Error {
 }
 
 async function updateNickname(userId, nickname) {
-  const trimmedNickname = String(nickname || '').trim();
-  if (!trimmedNickname) throw new ProfileError(400, '닉네임이 비어있습니다.');
+  const trimmedNickname = validateUserGeneratedText(nickname, { field: 'nickname' });
 
   // 중복 닉네임 검사 (본인 제외)
   const existing = await User.findOne({ nickname: trimmedNickname }).select('_id').lean();
@@ -35,8 +35,7 @@ async function updateRegion(userId, region1, region2) {
 }
 
 async function updateSelfintro(userId, selfintroRaw) {
-  const selfintro = String(selfintroRaw ?? '').trim();
-  if (!selfintro) throw new ProfileError(400, '소개가 비어있습니다.');
+  const selfintro = validateUserGeneratedText(selfintroRaw, { field: 'selfintro' });
 
   const user = await User.findByIdAndUpdate(userId, { selfintro }, { new: true });
   if (!user) throw new ProfileError(404, '사용자 없음');

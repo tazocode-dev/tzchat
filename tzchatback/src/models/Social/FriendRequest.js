@@ -29,6 +29,7 @@ const friendRequestSchema = new mongoose.Schema(
       type: String,              // 신청 메시지 (선택)
       default: '',
       trim: true,
+      maxlength: 300,
     },
     matchType: {
       type: String,

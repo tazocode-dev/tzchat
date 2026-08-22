@@ -1,47 +1,67 @@
 // src/controllers/admin/betaMigration.controller.js
 // ────────────────────────────────────────────────────────────
-// 베타→일반회원 일괄 전환 컨트롤러: 권한가드 + 응답 조립.
+// 베타→일반회원 일괄 전환 컨트롤러: 요청 검증과 응답 조립.
 // 실제 로직은 services/admin/betaMigrationService.js가 담당한다.
 // ────────────────────────────────────────────────────────────
 
-const { previewMigration, executeMigration, healthInfo } = require('@/services/admin/betaMigrationService');
+const { previewMigration, executeMigration } = require('@/services/admin/betaMigrationService');
 
-// ───────────────────────────────────────────────
-// 간단 인증/권한 가드 (프로젝트 상황에 맞게 교체 가능)
-// ───────────────────────────────────────────────
-function requireAuth(req, res, next) {
-  if (req.user) return next();
-  return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
-}
-function requireMaster(req, res, next) {
-  const role = String(req.user?.role || '').toLowerCase();
-  if (role === 'master') return next();
-  return res.status(403).json({ ok: false, error: 'FORBIDDEN' });
-}
+const BETA_MIGRATION_CONFIRMATION = 'BETA_TO_BASIC';
 
-async function preview(req, res) {
-  try {
-    const result = await previewMigration();
-    return res.json({ ok: true, ...result });
-  } catch (err) {
-    console.error('[admin:migration:preview] error:', err);
-    return res.status(500).json({ ok: false, error: 'INTERNAL_ERROR' });
+class BetaMigrationRequestError extends Error {
+  constructor(code, message) {
+    super(message);
+    this.status = 400;
+    this.code = code;
   }
 }
 
-async function execute(req, res) {
+function parseExecutionRequest(body) {
+  if (!body || typeof body.dryRun !== 'boolean') {
+    throw new BetaMigrationRequestError(
+      'INVALID_MIGRATION_MODE',
+      'dryRun은 boolean 값이어야 합니다.',
+    );
+  }
+  if (body.dryRun === false && body.confirmation !== BETA_MIGRATION_CONFIRMATION) {
+    throw new BetaMigrationRequestError(
+      'MIGRATION_CONFIRMATION_REQUIRED',
+      `실제 전환을 실행하려면 ${BETA_MIGRATION_CONFIRMATION} 확인 문구가 필요합니다.`,
+    );
+  }
+  return { dryRun: body.dryRun };
+}
+
+async function preview(req, res, dependencies = {}) {
   try {
-    const dryRun = !!req.body?.dryRun;
-    const result = await executeMigration(dryRun);
+    const runPreview = dependencies.previewMigration || previewMigration;
+    const result = await runPreview();
     return res.json({ ok: true, ...result });
   } catch (err) {
-    console.error('[admin:migration:execute] error:', err);
-    return res.status(500).json({ ok: false, error: 'INTERNAL_ERROR' });
+    console.error('[admin:migration:preview] failed', { name: err?.name, code: err?.code, message: err?.message });
+    return res.status(500).json({ ok: false, code: 'MIGRATION_INTERNAL_ERROR', message: '마이그레이션 미리보기에 실패했습니다.' });
   }
 }
 
-function health(req, res) {
-  return res.json({ ok: true, ...healthInfo() });
+async function execute(req, res, dependencies = {}) {
+  try {
+    const { dryRun } = parseExecutionRequest(req.body);
+    const runMigration = dependencies.executeMigration || executeMigration;
+    const result = await runMigration(dryRun);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    if (err instanceof BetaMigrationRequestError) {
+      return res.status(err.status).json({ ok: false, code: err.code, message: err.message });
+    }
+    console.error('[admin:migration:execute] failed', { name: err?.name, code: err?.code, message: err?.message });
+    return res.status(500).json({ ok: false, code: 'MIGRATION_INTERNAL_ERROR', message: '마이그레이션 실행에 실패했습니다.' });
+  }
 }
 
-module.exports = { requireAuth, requireMaster, preview, execute, health };
+module.exports = {
+  BETA_MIGRATION_CONFIRMATION,
+  BetaMigrationRequestError,
+  execute,
+  parseExecutionRequest,
+  preview,
+};

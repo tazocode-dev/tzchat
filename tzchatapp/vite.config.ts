@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
+
+const appVersion = JSON.parse(
+  readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+).version
 
 export default defineConfig({
     // 🔒 dev/build 동일 경로 기준
@@ -16,6 +21,11 @@ export default defineConfig({
         },
       }),
     ],
+
+    // package.json을 출시 버전의 단일 소스로 사용한다.
+    define: {
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
 
     // 경로 별칭: @ -> src (tsconfig.paths와 일치)
     resolve: {
@@ -40,7 +50,7 @@ export default defineConfig({
       rollupOptions: {
         output: {
           manualChunks: {
-            vendor: ['vue', 'vue-router', '@ionic/vue', '@vueuse/core', 'axios'],
+            vendor: ['vue', 'vue-router', '@ionic/vue', 'axios'],
           },
         },
       },

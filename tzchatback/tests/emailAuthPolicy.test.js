@@ -23,7 +23,9 @@ const {
   verifyCode,
 } = require('../src/services/auth/emailVerificationService')
 const {
-  findOrCreateUserByEmail,
+  EmailAuthError,
+  findExistingUserByEmail,
+  verifyAndLogin,
 } = require('../src/services/auth/emailAuthService')
 
 function query(valueFactory) {
@@ -217,22 +219,14 @@ test('일반 이메일 메일 발송이 실패하면 방금 만든 인증 레코
 })
 
 function createUserModel(existingUser = null) {
-  const created = []
   return {
-    created,
     findOne(filter) {
-      if (filter.nickname) return query(() => null)
       return Promise.resolve(existingUser && existingUser.email === filter.email ? existingUser : null)
-    },
-    async create(data) {
-      const user = { _id: 'new-user-id', ...data, async save() {} }
-      created.push(user)
-      return user
     },
   }
 }
 
-test('지정 관리자 이메일은 신규·기존 사용자 모두 서버에서 master로 보정한다', async () => {
+test('지정 관리자 이메일은 기존 사용자만 서버에서 master로 보정한다', async () => {
   assert.equal(isTemporaryAdminEmail('  NORMAL-ADMIN@EXAMPLE.COM '), true)
   assert.equal(isReviewLoginEmail('normal-admin@example.com'), false)
   assert.equal(getReviewLoginCode('normal-admin@example.com'), null)
@@ -240,11 +234,6 @@ test('지정 관리자 이메일은 신규·기존 사용자 모두 서버에서
   assert.equal(isTemporaryAdminEmail('  FIXED-ADMIN@EXAMPLE.COM '), true)
   assert.equal(getForcedAccountRole('fixed-admin@example.com'), 'master')
   assert.equal(getForcedAccountRole('test01@example.com'), 'user')
-
-  const newUsers = createUserModel()
-  const created = await findOrCreateUserByEmail(' NORMAL-ADMIN@EXAMPLE.COM ', { UserModel: newUsers })
-  assert.equal(created.user.email, 'normal-admin@example.com')
-  assert.equal(created.user.role, 'master')
 
   let saves = 0
   const existingUser = {
@@ -254,26 +243,21 @@ test('지정 관리자 이메일은 신규·기존 사용자 모두 서버에서
     role: 'user',
     async save() { saves += 1 },
   }
-  const existing = await findOrCreateUserByEmail('normal-admin@example.com', {
+  const existing = await findExistingUserByEmail('normal-admin@example.com', {
     UserModel: createUserModel(existingUser),
   })
   assert.equal(existing.user.role, 'master')
   assert.equal(saves, 1)
 
-  const testMasterUsers = createUserModel()
-  const testMaster = await findOrCreateUserByEmail(' FIXED-ADMIN@EXAMPLE.COM ', { UserModel: testMasterUsers })
-  assert.equal(testMaster.user.email, 'fixed-admin@example.com')
-  assert.equal(testMaster.user.role, 'master')
+  await assert.rejects(
+    findExistingUserByEmail(' FIXED-ADMIN@EXAMPLE.COM ', { UserModel: createUserModel() }),
+    error => error instanceof EmailAuthError && error.code === 'EMAIL_LOGIN_UNAVAILABLE',
+  )
 })
 
-test('스토어 심사용 일반 계정은 신규·기존 사용자 모두 서버에서 user로 보정한다', async () => {
+test('스토어 심사용 일반 계정은 기존 사용자만 서버에서 user로 보정한다', async () => {
   assert.equal(isTemporaryAdminEmail('fixed-user@example.com'), false)
   assert.equal(getForcedAccountRole(' FIXED-USER@EXAMPLE.COM '), 'user')
-
-  const newUsers = createUserModel()
-  const created = await findOrCreateUserByEmail(' FIXED-USER@EXAMPLE.COM ', { UserModel: newUsers })
-  assert.equal(created.user.email, 'fixed-user@example.com')
-  assert.equal(created.user.role, 'user')
 
   let saves = 0
   const existingUser = {
@@ -283,11 +267,19 @@ test('스토어 심사용 일반 계정은 신규·기존 사용자 모두 서�
     role: 'master',
     async save() { saves += 1 },
   }
-  const existing = await findOrCreateUserByEmail('fixed-user@example.com', {
+  const existing = await findExistingUserByEmail('fixed-user@example.com', {
     UserModel: createUserModel(existingUser),
   })
   assert.equal(existing.user.role, 'user')
   assert.equal(saves, 1)
+
+  await assert.rejects(
+    findExistingUserByEmail('unknown@example.com', { UserModel: createUserModel() }),
+    error => error instanceof EmailAuthError &&
+      error.status === 401 &&
+      error.code === 'EMAIL_LOGIN_UNAVAILABLE' &&
+      error.message === '이메일로 로그인할 수 없습니다.',
+  )
 })
 
 test('환경변수의 계정 정책을 수정하면 다시 시작하지 않은 테스트에서도 최신 값을 읽는다', () => {
@@ -320,11 +312,11 @@ test('스피드 매칭 시간 예외는 test와 test1~test4 계정에만 적용�
   assert.equal(isSpeedMatchingTestEmail('normal@tazocode.com'), false)
 })
 
-test('일반 이메일 신규 사용자는 클라이언트 입력과 무관하게 user이며 기존 서버 master는 강등하지 않는다', async () => {
-  const normalUsers = createUserModel()
-  const created = await findOrCreateUserByEmail('normal@example.com', { UserModel: normalUsers })
-  assert.equal(created.user.role, 'user')
-
+test('일반 이메일은 신규 계정을 만들지 않으며 기존 서버 master는 강등하지 않는다', async () => {
+  await assert.rejects(
+    findExistingUserByEmail('normal@example.com', { UserModel: createUserModel() }),
+    error => error instanceof EmailAuthError && error.code === 'EMAIL_LOGIN_UNAVAILABLE',
+  )
   const legitimateMaster = {
     _id: 'existing-master-id',
     email: 'owner@example.com',
@@ -332,13 +324,13 @@ test('일반 이메일 신규 사용자는 클라이언트 입력과 무관하�
     role: 'master',
     async save() { assert.fail('변경이 없으므로 저장하지 않아야 합니다.') },
   }
-  const existing = await findOrCreateUserByEmail('owner@example.com', {
+  const existing = await findExistingUserByEmail('owner@example.com', {
     UserModel: createUserModel(legitimateMaster),
   })
   assert.equal(existing.user.role, 'master')
 })
 
-test('기존 이메일은 새 계정을 만들지 않고 같은 사용자 ID로 로그인 대상을 찾는다', async () => {
+test('기존 이메일은 같은 사용자 ID로 로그인 대상을 찾는다', async () => {
   const existingUser = {
     _id: 'existing-user-id',
     email: 'existing@example.com',
@@ -347,10 +339,23 @@ test('기존 이메일은 새 계정을 만들지 않고 같은 사용자 ID로 
     async save() { assert.fail('변경이 없으므로 저장하지 않아야 합니다.') },
   }
   const users = createUserModel(existingUser)
-  const result = await findOrCreateUserByEmail(' EXISTING@example.com ', { UserModel: users })
+  const result = await findExistingUserByEmail(' EXISTING@example.com ', { UserModel: users })
   assert.equal(result.isNewUser, false)
   assert.equal(String(result.user._id), 'existing-user-id')
-  assert.equal(users.created.length, 0)
+})
+
+test('인증번호가 맞아도 존재하지 않는 이메일은 계정과 토큰을 만들지 않는다', async () => {
+  let signed = false
+  await assert.rejects(
+    verifyAndLogin({ email: 'new@example.com', code: '123456' }, {
+      verifyCodeFn: async () => ({ email: 'new@example.com' }),
+      UserModel: createUserModel(),
+      signTokenFn: () => { signed = true; return 'token' },
+      signRefreshTokenFn: () => { signed = true; return 'refresh' },
+    }),
+    error => error instanceof EmailAuthError && error.code === 'EMAIL_LOGIN_UNAVAILABLE',
+  )
+  assert.equal(signed, false)
 })
 
 test('이메일 정규화는 trim과 lowercase만 적용한다', () => {

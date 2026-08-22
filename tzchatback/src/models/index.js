@@ -23,6 +23,7 @@ require('./Social/FriendRequest');  //역할: 친구 신청 흐름 관리(보냄
 require('./System/AdminLog');  //역할: 운영자 액션 감사 로그(승격/차단/삭제 등).
 require('./System/AppConfig');  //역할: 런타임 키-값 설정 저장(기능 토글/수치 설정).
 require('./System/Notice');  //역할: 공지사항(활성 기간/노출 제어 포함).
+require('./System/Report');  //역할: 사용자 신고와 관리자 처리 상태 보관.
 require('./System/UserDailyAgg'); // tzchat 프로젝트 - 사용자 일일 활동 집계(원천 지표)
 require('./System/UserDailyScore'); // tzchat 프로젝트 - 사용자 일일 노출 점수(분배용)
 
@@ -58,6 +59,7 @@ module.exports = {
   AdminLog: mongoose.model('AdminLog'),
   AppConfig: mongoose.model('AppConfig'),
   Notice: mongoose.model('Notice'),
+  Report: mongoose.model('Report'),
   UserDailyAgg: mongoose.model('UserDailyAgg'),
   UserDailyScore: mongoose.model('UserDailyScore'),
 
@@ -78,21 +80,3 @@ module.exports = {
 
 
 };
-
-
-/* Router 사용할때
-
-const requireLogin = require('@/middlewares/authMiddleware');
-
-// models/index.js 가 모든 모델을 export 한다는 가정
-
-const {
-
-
-
-  } = require('@/models');
-
-
-
-
-*/

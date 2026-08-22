@@ -6,6 +6,8 @@
 // 먼저 읽고 환경별 설정을 덧붙이며, 셸/PM2 환경변수가 항상 우선한다.
 const { loadEnv } = require('./config/loadEnv');
 const loadedEnv = loadEnv();
+const { installProductionConsoleGuard, reportError } = require('./utils/runtimeLogger');
+installProductionConsoleGuard();
 // DB 연결이나 라우터 로드 전에 잘못된 FCM 자격증명 경로를 포함한 환경 설정을 거부한다.
 require('./config/validateEnv').validateEnv({ runtime: true });
 console.log(`[ENV] ${loadedEnv.nodeEnv} 환경 파일 ${loadedEnv.loaded.length}개 적용됨`);
@@ -19,21 +21,22 @@ async function startServer() {
   await connectDatabase();
 
   const { app, sessionMiddleware, allowedOriginsList, ChatRoom } = require('@/app');
+  const { User } = require('@/models');
 
   const server = http.createServer(app);
 
   const { initSocket } = require('@/socket');
-  initSocket(server, { app, sessionMiddleware, allowedOriginsList, ChatRoom });
+  initSocket(server, { app, sessionMiddleware, allowedOriginsList, ChatRoom, User });
 
   // ★ 스케줄러 로드 (앱 구동 시 1회)
   require('@/jobs/retentionWorker');
   require('@/jobs/dailyScoreJob').initDailyScoreCron();
 
   process.on('unhandledRejection', (err) => {
-    console.error('❌ Unhandled Promise Rejection:', err);
+    reportError('UNHANDLED_REJECTION', err);
   });
   process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err);
+    reportError('UNCAUGHT_EXCEPTION', err);
   });
 
   const PORT = Number(process.env.PORT || 11018);
@@ -57,6 +60,6 @@ async function startServer() {
 }
 
 startServer().catch((err) => {
-  console.error('❌ 서버 시작 실패:', err);
+  reportError('SERVER_START_FAILED', err);
   process.exit(1);
 });

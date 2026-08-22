@@ -4,8 +4,13 @@
 // 실제 로직은 services/auth/emailVerificationService.js, services/auth/emailAuthService.js가 담당한다.
 // ------------------------------------------------------------
 const { EmailVerificationError, requestCode } = require('@/services/auth/emailVerificationService');
-const { verifyAndLogin } = require('@/services/auth/emailAuthService');
+const { EmailAuthError, verifyAndLogin } = require('@/services/auth/emailAuthService');
 const { setJwtCookie, setRefreshCookie } = require('@/controllers/session.controller');
+
+function respondVerifyError(res, err) {
+  if (!(err instanceof EmailVerificationError) && !(err instanceof EmailAuthError)) return null;
+  return res.status(err.status).json({ ok: false, code: err.code, message: err.message });
+}
 
 // POST /api/auth/email/request
 async function request(req, res) {
@@ -63,7 +68,7 @@ async function verify(req, res) {
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       ok: true,
-      message: isNewUser ? '회원가입 및 로그인 성공' : '로그인 성공',
+      message: '로그인 성공',
       isNewUser,
       nickname: user.nickname,
       email: user.email,
@@ -75,13 +80,14 @@ async function verify(req, res) {
       expiresIn,
     });
   } catch (err) {
-    if (err instanceof EmailVerificationError) {
+    const errorResponse = respondVerifyError(res, err);
+    if (errorResponse) {
       console.log('[AUTH][ERR]', { step: 'email/verify', code: err.code, message: err.message });
-      return res.status(err.status).json({ ok: false, code: err.code, message: err.message });
+      return errorResponse;
     }
     console.log('[AUTH][ERR]', { step: 'email/verify', message: err?.message });
     return res.status(500).json({ ok: false, message: '서버 오류' });
   }
 }
 
-module.exports = { request, verify };
+module.exports = { request, verify, respondVerifyError };

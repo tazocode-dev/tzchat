@@ -67,7 +67,7 @@ async function getAdminUsers({ page: pageInput, limit: limitInput, search: searc
 
   const [users, total] = await Promise.all([
     User.find(query)
-      .select('_id username email nickname birthyear gender region1 region2 preference role user_level suspended createdAt')
+      .select('_id username email nickname birthyear gender region1 region2 preference role user_level suspended suspendedReason suspendedAt createdAt')
       .sort({ createdAt: -1, _id: -1 })
       .skip((page - 1) * limit)
       .limit(limit)

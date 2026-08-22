@@ -28,7 +28,7 @@ module.exports = (app) => {
   // ----------------------------------------------------------
   // User / Auth / Profile 등 일반 /api 라우터 (인증 요구 가능)
   // ----------------------------------------------------------
-  app.use('/api', require('./user/authRouter'));                 // 회원가입 + 공개 유저 목록
+  app.use('/api', require('./user/authRouter'));                 // 인증된 유저 목록
   app.use('/api', require('./user/accountRouter'));              // 내 계정 중심 라우터
   app.use('/api', require('./user/sessionRouter'));              // 세션/토큰 / 로그인 / 로그아웃
 
@@ -43,7 +43,6 @@ module.exports = (app) => {
   // public
   app.use('/api', require('./public/imageWriteRouter'));         // 프로필 이미지 업로드·리사이즈·목록·대표 지정·삭제
   app.use('/api', require('./public/imageReadRouter'));          // 프로필 이미지 조회, 대표지정
-  app.use('/api', require('./public/gradeRouter'));              // 유저 등급 수동 작업 라우터 (임시)
 
   // ----------------------------------------------------------
   // Chat / Social
@@ -54,6 +53,7 @@ module.exports = (app) => {
   app.use('/api', require('./chat/friendRelationRouter'));       // 친구 목록 /삭제/ 차단/해제/ 유저상세
   app.use('/api', require('./chat/friendRequestManageRouter'));  // 친구 "신청 처리/목록" 전용 라우터
   app.use('/api', require('./chat/friendRequestSendRouter'));    // 친구 신청 발송 / 취소
+  app.use('/api', require('./system/reportRouter'));              // 사용자 신고 접수
 
   // ----------------------------------------------------------
   // Search
@@ -67,13 +67,5 @@ module.exports = (app) => {
   // System
   // ----------------------------------------------------------
   app.use('/api/push', require('./system/pushRouter'));          // 푸시 디바이스 토큰 등록/해제
-  // ----------------------------------------------------------
-  // Membership
-  // ----------------------------------------------------------
-  // 초기 홍보 기간에는 멤버십 구매를 운영하지 않는다. 구현 코드는 추후 재검토를 위해 보존한다.
-
-  // ----------------------------------------------------------
-  // Payment
-  // ----------------------------------------------------------
-  // 초기 홍보 기간에는 결제 API를 노출하지 않는다.
+  // 초기 무료 운영 기간에는 멤버십·결제 API를 제공하지 않는다.
 };

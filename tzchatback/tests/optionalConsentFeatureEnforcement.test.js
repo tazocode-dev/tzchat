@@ -10,6 +10,8 @@ const { updatePreference } = require('../src/services/userProfileService')
 const { updateSearchPreference, updateSearchToggles } = require('../src/services/search/searchSettingsService')
 const { User } = require('../src/models')
 
+const VALID_CONTACT_HASH = 'a'.repeat(64)
+
 function consentDependencies(optedIn) {
   return {
     TermsModel: {
@@ -43,7 +45,7 @@ test('현재 연락처 선택 동의가 없으면 해시를 저장하지 않고 
   }
 
   await assert.rejects(
-    saveContactHashes('user-1', ['hash-a'], dependencies),
+    saveContactHashes('user-1', [VALID_CONTACT_HASH], dependencies),
     error => error.status === 403 &&
       error.code === 'OPTIONAL_CONSENT_REQUIRED' &&
       error.details.slug === 'contacts-consent',
@@ -55,12 +57,12 @@ test('현재 연락처 선택 동의가 있으면 해시 저장을 허용한다'
   const writes = []
   const dependencies = {
     ...consentDependencies(true),
-    UserModel: userModelReturning({ _id: 'user-1', localContactHashes: ['hash-a'] }, writes),
+    UserModel: userModelReturning({ _id: 'user-1', localContactHashes: [VALID_CONTACT_HASH] }, writes),
   }
 
-  const result = await saveContactHashes('user-1', ['hash-a', 'hash-a'], dependencies)
+  const result = await saveContactHashes('user-1', [VALID_CONTACT_HASH, VALID_CONTACT_HASH], dependencies)
   assert.equal(result.count, 1)
-  assert.deepEqual(writes[0].update.$set.localContactHashes, ['hash-a'])
+  assert.deepEqual(writes[0].update.$set.localContactHashes, [VALID_CONTACT_HASH])
 })
 
 test('지인 제외 ON은 현재 연락처 선택 동의를 요구하고 DB 쓰기 전에 거부한다', async () => {

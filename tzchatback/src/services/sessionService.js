@@ -10,6 +10,15 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User } = require('@/models');
 const { JWT_SECRET } = require('@/config/secrets');
+const { throwIfAccountRestricted } = require('@/services/auth/accountStatusService');
+
+const INVALID_CREDENTIALS = {
+  status: 401,
+  code: 'INVALID_CREDENTIALS',
+  message: '아이디 또는 비밀번호가 올바르지 않습니다.',
+};
+// 존재하지 않는 계정도 bcrypt 검사를 수행해 공개 응답 시간 차이를 줄인다.
+const DUMMY_PASSWORD_HASH = '$2b$10$rUaEz6LSXCHTXTgzgsWQsOHGgGMvwALtQDkJeo0l8FrYbCtqAW0Ti';
 
 class SessionError extends Error {
   constructor(status, code, message) {
@@ -29,23 +38,10 @@ function s(v) { return (v || '').toString().trim(); }
 
 function resolveRole(u) {
   if (!u) return '';
-  if (u.role) return String(u.role);
-  if (Array.isArray(u.roles)) {
-    if (u.roles.includes('master')) return 'master';
-    if (u.roles.includes('admin')) return 'admin';
-    if (u.roles.length > 0) return String(u.roles[0]);
-  }
-  if (u.username === 'master') return 'master';
-  return 'user';
+  return u.role === 'master' ? 'master' : 'user';
 }
 function resolveIsAdmin(u) {
-  if (!u) return false;
-  if (u.isAdmin === true) return true;
-  const role = resolveRole(u);
-  if (role === 'master' || role === 'admin') return true;
-  if (Array.isArray(u.roles) && (u.roles.includes('master') || u.roles.includes('admin'))) return true;
-  if (u.username === 'master') return true;
-  return false;
+  return resolveRole(u) === 'master';
 }
 
 function signToken(user) {
@@ -92,31 +88,36 @@ function extractTokenFromReq(req, cookieName) {
 // ======================================================
 // 로그인: 자격 증명 검증 + 토큰 발급
 // ======================================================
-async function authenticateUser(username, password) {
-  const safeUsername = s(username);
-  const user = await User.findOne({ username: safeUsername }).select('+password role roles username nickname');
-  if (!user) {
-    throw new SessionError(401, 'NO_USER', '아이디 없음');
+async function authenticateUser(username, password, dependencies = {}) {
+  const safeUsername = s(username).slice(0, 128);
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findOne({ username: safeUsername })
+    .select('+password role username nickname suspended status deletionDueAt isDeleted');
+  const hashed = String(user?.password || '');
+  let isMatch = false;
+  try {
+    isMatch = await (dependencies.comparePasswordFn || bcrypt.compare)(
+      String(password || ''),
+      hashed || DUMMY_PASSWORD_HASH,
+    );
+  } catch {}
+  if (!user || !hashed || !isMatch) {
+    throw new SessionError(
+      INVALID_CREDENTIALS.status,
+      INVALID_CREDENTIALS.code,
+      INVALID_CREDENTIALS.message,
+    );
   }
-
-  const hashed = String(user.password || '');
-  if (!hashed) {
-    throw new SessionError(500, 'NO_PASSWORD_FIELD', '계정 비밀번호 필드를 찾을 수 없습니다.');
-  }
-
-  const isMatch = await bcrypt.compare(String(password || ''), hashed);
-  if (!isMatch) {
-    throw new SessionError(401, 'BAD_PASSWORD', '비밀번호 틀림');
-  }
+  throwIfAccountRestricted(user, SessionError);
 
   // 로그인 시간 갱신(베스트 에포트)
   user.last_login = new Date();
   user.save().catch(() => {});
 
-  const token = signToken(user);
-  const refreshToken = signRefreshToken(user);
+  const token = (dependencies.signTokenFn || signToken)(user);
+  const refreshToken = (dependencies.signRefreshTokenFn || signRefreshToken)(user);
   const role = resolveRole(user);
-  const roles = Array.isArray(user.roles) ? user.roles : (role ? [role] : []);
+  const roles = role ? [role] : [];
   const isAdmin = resolveIsAdmin(user);
 
   return { user, token, refreshToken, role, roles, isAdmin, expiresIn: JWT_EXPIRES_IN };
@@ -125,14 +126,14 @@ async function authenticateUser(username, password) {
 // ======================================================
 // Refresh Token 검증 + Access Token 재발급
 // ======================================================
-async function rotateTokensFromRefresh(token) {
+async function rotateTokensFromRefresh(token, dependencies = {}) {
   if (!token) {
     throw new SessionError(401, 'no_refresh_token', '리프레시 토큰이 없습니다.');
   }
 
   let decoded;
   try {
-    decoded = jwt.verify(token, JWT_SECRET);
+    decoded = (dependencies.verifyTokenFn || jwt.verify)(token, JWT_SECRET);
   } catch (e) {
     const code = e?.name === 'TokenExpiredError' ? 'refresh_token_expired' : 'refresh_token_invalid';
     throw new SessionError(401, code, '리프레시 토큰이 유효하지 않습니다.');
@@ -141,13 +142,16 @@ async function rotateTokensFromRefresh(token) {
     throw new SessionError(401, 'refresh_token_invalid', '리프레시 토큰이 유효하지 않습니다.');
   }
 
-  const user = await User.findById(decoded.sub).select('nickname username role roles isAdmin');
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findById(decoded.sub)
+    .select('nickname username role suspended status deletionDueAt isDeleted');
   if (!user) {
     throw new SessionError(401, 'user_not_found', '사용자를 찾을 수 없습니다.');
   }
+  throwIfAccountRestricted(user, SessionError);
 
-  const newAccessToken = signToken(user);
-  const newRefreshToken = signRefreshToken(user);
+  const newAccessToken = (dependencies.signTokenFn || signToken)(user);
+  const newRefreshToken = (dependencies.signRefreshTokenFn || signRefreshToken)(user);
   return { newAccessToken, newRefreshToken, expiresIn: JWT_EXPIRES_IN };
 }
 

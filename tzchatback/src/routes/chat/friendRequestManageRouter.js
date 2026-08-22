@@ -9,12 +9,11 @@
 // - GET  /friend-requests/sent       : 보낸 신청 목록
 // ------------------------------------------------------------
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/chat/friendRequestManage.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion, controller.requestLogger);
+router.use(authMiddleware, controller.requestLogger);
 
 router.put('/friend-request/:id/accept', controller.accept);
 router.put('/friend-request/:id/reject', controller.reject);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // cap copy 후 Android/iOS 웹 산출물이 현재 dist와 동일한 자산을 참조하는지 검사한다.
-import { readdirSync, statSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const DIST = 'dist'
@@ -43,6 +43,9 @@ function indexAssetReferences(indexFile) {
 
 let failed = false
 const distReferences = indexAssetReferences(join(DIST, 'index.html'))
+const distManifestFile = join(DIST, 'manifest.webmanifest')
+const distManifestBytes = readFileSync(distManifestFile)
+const distManifest = JSON.parse(distManifestBytes.toString('utf8'))
 
 if (distReferences.length === 0) {
   console.error('❌ [verifyNativeCopy] dist/index.html에 빌드 자산 참조가 없습니다.')
@@ -54,6 +57,21 @@ for (const { name, publicDir, configFile } of NATIVE_TARGETS) {
   if (JSON.stringify(nativeReferences) !== JSON.stringify(distReferences)) {
     console.error(`❌ [verifyNativeCopy] ${name} index.html의 자산 참조가 dist와 다릅니다.`)
     failed = true
+  }
+
+  const nativeManifestFile = join(publicDir, 'manifest.webmanifest')
+  if (!existsSync(nativeManifestFile) || !readFileSync(nativeManifestFile).equals(distManifestBytes)) {
+    console.error(`❌ [verifyNativeCopy] ${name} PWA manifest가 dist와 다릅니다.`)
+    failed = true
+  }
+  for (const icon of distManifest.icons || []) {
+    const relativeIconPath = String(icon.src || '').replace(/^\//, '')
+    const distIcon = join(DIST, relativeIconPath)
+    const nativeIcon = join(publicDir, relativeIconPath)
+    if (!relativeIconPath || !existsSync(nativeIcon) || !readFileSync(nativeIcon).equals(readFileSync(distIcon))) {
+      console.error(`❌ [verifyNativeCopy] ${name} PWA 아이콘이 dist와 다릅니다: ${icon.src}`)
+      failed = true
+    }
   }
 
   for (const file of collectFiles(publicDir)) {
@@ -75,4 +93,4 @@ for (const { name, publicDir, configFile } of NATIVE_TARGETS) {
 }
 
 if (failed) process.exit(1)
-console.log(`✅ [verifyNativeCopy] Android/iOS 자산 참조 및 네트워크 설정 확인 (${distReferences.length}개 참조)`)
+console.log(`✅ [verifyNativeCopy] Android/iOS 웹·PWA 자산 및 네트워크 설정 확인 (${distReferences.length}개 참조)`)

@@ -4,6 +4,7 @@
 // ────────────────────────────────────────────────────────────
 
 const { User } = require('@/models');
+const { getBlockedUserIdSet, buildDiscoverableUserFilter } = require('@/services/chat/blockPolicyService');
 const {
   EMERGENCY_DURATION_SECONDS,
   computeSessionRemaining,
@@ -131,6 +132,10 @@ async function turnOff(userId) {
   };
 }
 
+const EMERGENCY_PUBLIC_FIELDS =
+  '_id username nickname birthyear gender marriage region1 region2 preference selfintro ' +
+  'profileMain profileImages user_level emergency';
+
 function enrich(users) {
   return (users || []).map(u => ({
     ...u,
@@ -141,10 +146,15 @@ function enrich(users) {
   }));
 }
 
-async function listActiveUsers(requesterEmail = '') {
+async function listActiveUsers(requesterEmail = '', requesterId = '') {
   const now = new Date();
   const windowAgo = new Date(now.getTime() - EMERGENCY_DURATION_SECONDS * 1000);
+  const blockedUserIds = requesterId ? await getBlockedUserIdSet(requesterId) : new Set();
+  const visibilityFilter = requesterId
+    ? buildDiscoverableUserFilter(requesterId, blockedUserIds)
+    : { suspended: { $ne: true }, status: { $nin: ['pendingDeletion', 'deleted'] }, isDeleted: { $ne: true } };
   const users = await User.find({
+    ...visibilityFilter,
     'emergency.isActive': true,
     $or: [
       { 'emergency.expiresAt': { $gt: now } },
@@ -153,7 +163,7 @@ async function listActiveUsers(requesterEmail = '') {
         'emergency.activatedAt': { $gte: windowAgo },
       },
     ],
-  }).select('-password').lean();
+  }).select(EMERGENCY_PUBLIC_FIELDS).lean();
 
   return {
     users: enrich(users),
@@ -162,11 +172,16 @@ async function listActiveUsers(requesterEmail = '') {
   };
 }
 
-async function filterActiveUsersByRegion(regions, requesterEmail = '') {
+async function filterActiveUsersByRegion(regions, requesterEmail = '', requesterId = '') {
   const now = new Date();
   const windowAgo = new Date(now.getTime() - EMERGENCY_DURATION_SECONDS * 1000);
 
+  const blockedUserIds = requesterId ? await getBlockedUserIdSet(requesterId) : new Set();
+  const visibilityFilter = requesterId
+    ? buildDiscoverableUserFilter(requesterId, blockedUserIds)
+    : { suspended: { $ne: true }, status: { $nin: ['pendingDeletion', 'deleted'] }, isDeleted: { $ne: true } };
   const baseCondition = {
+    ...visibilityFilter,
     'emergency.isActive': true,
     $or: [
       { 'emergency.expiresAt': { $gt: now } },
@@ -189,7 +204,7 @@ async function filterActiveUsersByRegion(regions, requesterEmail = '') {
 
   console.log('[DB][QRY]', { model: 'User', op: 'find', criteria: query });
 
-  const users = await User.find(query).select('-password').lean();
+  const users = await User.find(query).select(EMERGENCY_PUBLIC_FIELDS).lean();
   return {
     users: enrich(users),
     durationSeconds: EMERGENCY_DURATION_SECONDS,

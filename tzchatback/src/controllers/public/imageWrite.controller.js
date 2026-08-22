@@ -4,17 +4,19 @@
 // 실제 파일 IO/Sharp/DB 로직은 services/public/imageWriteService.js가 담당한다.
 // ────────────────────────────────────────────────────────────
 
-const path = require('path');
 const multer = require('multer');
 
 const {
   ImageWriteError,
-  getUserProfileDir,
-  ensureDirSync,
-  genId,
   uploadImages,
   deleteImage,
 } = require('@/services/public/imageWriteService');
+const {
+  MAX_IMAGE_UPLOAD_BYTES,
+  createImageFileFilter,
+  createPrivateTempStorage,
+  wrapUploadMiddleware,
+} = require('@/services/media/imageUploadSecurityService');
 
 const log = (...args) => console.log('[profileImage:write]', ...args);
 
@@ -22,37 +24,13 @@ function getMyId(req) {
   return req?.user?._id || req?.session?.user?._id || null;
 }
 
-// ===== Multer (임시 저장: 사용자 폴더 내 tmp) =====
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    try {
-      const userId = getMyId(req);
-      if (!userId) return cb(new Error('인증 필요'), null);
-      const userDir = getUserProfileDir(userId);
-      const tmpDir = path.join(userDir, 'tmp');
-      ensureDirSync(tmpDir);
-      cb(null, tmpDir);
-    } catch (e) {
-      cb(e);
-    }
-  },
-  filename: (_req, file, cb) => {
-    const ext = (path.extname(file.originalname) || '').toLowerCase();
-    const uid = genId();
-    cb(null, `${uid}${ext || ''}`);
-  }
-});
-const fileFilter = (_req, file, cb) => {
-  if (!file.mimetype || !file.mimetype.startsWith('image/')) {
-    return cb(new Error('이미지 파일만 업로드할 수 있습니다.'), false);
-  }
-  cb(null, true);
-};
+// 임시 파일은 공개 /uploads 경로 밖에 확장자 없는 안전한 이름으로 저장한다.
 const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+  storage: createPrivateTempStorage('profile'),
+  fileFilter: createImageFileFilter(),
+  limits: { fileSize: MAX_IMAGE_UPLOAD_BYTES, files: 2 },
 });
+const uploadProfileImages = wrapUploadMiddleware(upload.array('images', 2));
 
 // ======================================================
 // [1] 이미지 업로드 (다중)
@@ -95,4 +73,4 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { upload, create, remove };
+module.exports = { upload, uploadProfileImages, create, remove };

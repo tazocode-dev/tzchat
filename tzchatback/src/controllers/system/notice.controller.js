@@ -8,7 +8,8 @@ const {
   NoticeError,
   listNotices,
   listManagedNotices,
-  getNotice,
+  getPublishedNotice,
+  getManagedNotice,
   createNotice,
   updateNotice,
   deleteNotice,
@@ -16,7 +17,7 @@ const {
 
 function handleError(err, res, next) {
   if (err instanceof NoticeError) {
-    return res.status(err.status).json({ error: err.message });
+    return res.status(err.status).json({ ...(err.code ? { code: err.code } : {}), error: err.message });
   }
   return next(err);
 }
@@ -39,9 +40,18 @@ async function listAll(req, res, next) {
   }
 }
 
-async function getOne(req, res, next) {
+async function getPublishedOne(req, res, next) {
   try {
-    const doc = await getNotice(req.params.id, req);
+    const doc = await getPublishedNotice(req.params.id);
+    res.json({ notice: doc });
+  } catch (e) {
+    handleError(e, res, next);
+  }
+}
+
+async function getManagedOne(req, res, next) {
+  try {
+    const doc = await getManagedNotice(req.params.id);
     res.json({ notice: doc });
   } catch (e) {
     handleError(e, res, next);
@@ -75,4 +85,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, listAll, getOne, create, update, remove };
+module.exports = { list, listAll, getPublishedOne, getManagedOne, create, update, remove };

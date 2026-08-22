@@ -3,12 +3,12 @@
 // Socket.IO 초기화. main.js에서 분리(지침: server.js/app.js/socket 관심사 분리).
 // -------------------------------------------------------------
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
-const { JWT_SECRET } = require('@/config/secrets');
 const { createOriginVerifier } = require('@/config/corsOrigins');
 const { sendPushToUser } = require('@/services/push/sender');
+const { createSocketAuthMiddleware } = require('@/socket/socketAuth');
+const { userRoom } = require('@/socket/userConnections');
 
-function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, ChatRoom }) {
+function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, ChatRoom, User }) {
   const verifyCorsOrigin = createOriginVerifier(allowedOriginsList, 'Socket.IO CORS blocked');
   const io = new Server(httpServer, {
     path: '/socket.io',
@@ -21,38 +21,10 @@ function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, Ch
 
   io.use((socket, next) => { sessionMiddleware(socket.request, {}, next); });
 
-  io.use((socket, next) => {
-    try {
-      const h = socket.handshake || {};
-      const headers = h.headers || {};
-      const auth = headers['authorization'] || '';
-      let token = null;
-      if (h.auth && h.auth.token) token = String(h.auth.token);
-      else if (auth.startsWith('Bearer ')) token = auth.slice(7).trim();
-      else if (h.query && h.query.token) token = String(h.query.token);
-      if (!token) {
-        console.log('[SOCKET][AUTH][JWT][MISS]', { sid: socket.id });
-        return next();
-      }
-      const payload = jwt.verify(token, JWT_SECRET);
-      socket.user = {
-        _id: payload._id || payload.sub || null,
-        username: payload.username || null,
-        nickname: payload.nickname || null,
-        roles: payload.roles || [],
-      };
-      console.log('[SOCKET][AUTH][JWT][OK]', { sid: socket.id, sub: socket.user._id });
-      return next();
-    } catch (err) {
-      console.log('[SOCKET][AUTH][ERR]', { step: 'jwt.verify', code: err.name, message: err.message });
-      return next();
-    }
-  });
+  io.use(createSocketAuthMiddleware({ UserModel: User }));
 
   const onlineUsers = new Set();
   const roomMembers = new Map();
-  const userRoom = (userId) => `user:${userId}`;
-
   app.set('io', io);
   app.set('onlineUsers', onlineUsers);
   app.set('roomMembers', roomMembers);
@@ -179,22 +151,16 @@ function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, Ch
 
   io.on('connection', (socket) => {
     try {
-      const jwtUserId = socket.user?._id ? String(socket.user._id) : null;
-      const session = socket.request.session;
-      const sessUserId = session?.user?._id ? String(session.user._id) : null;
-      const userId = jwtUserId || sessUserId || null;
+      const userId = String(socket.user._id);
 
-      console.log('[SOCKET][CONN]', { sid: socket.id, userId: userId || '(anon)', via: jwtUserId ? 'jwt' : (sessUserId ? 'session' : 'anonymous') });
+      console.log('[SOCKET][CONN]', { sid: socket.id, via: socket.authVia });
 
-      if (userId) {
-        onlineUsers.add(userId);
-        socket.join(userRoom(userId));
-        console.log(`👤 자동 개인룸 조인: ${userRoom(userId)}`);
-      }
+      onlineUsers.add(userId);
+      socket.join(userRoom(userId));
+      console.log('👤 자동 개인룸 조인');
 
       socket.on('join', (payload = {}) => {
         try {
-          if (!userId) return;
           const requestedId = String(payload.userId || '');
           if (requestedId && requestedId !== userId) {
             console.warn('[SOCKET][AUTH][REJECT]', { step: 'join', requestedId, userId });
@@ -208,16 +174,16 @@ function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, Ch
 
       socket.on('joinRoom', async (roomId) => {
         try {
-          if (!userId || !roomId) return;
+          if (!roomId) return;
           const isParticipant = await ChatRoom.exists({ _id: roomId, participants: userId });
           if (!isParticipant) {
             console.warn('[SOCKET][AUTH][REJECT]', { step: 'joinRoom', roomId, userId });
             return;
           }
           socket.join(roomId);
-          console.log(`[SOCKET][MSG] joinRoom`, { roomId, from: userId || '(anon)', type: 'chatroom' });
+          console.log(`[SOCKET][MSG] joinRoom`, { roomId, type: 'chatroom' });
           if (!roomMembers.has(roomId)) roomMembers.set(roomId, new Set());
-          if (userId) roomMembers.get(roomId).add(userId);
+          roomMembers.get(roomId).add(userId);
         } catch (err) {
           console.log('[SOCKET][ERR]', { step: 'joinRoom', message: err.message });
         }
@@ -226,8 +192,8 @@ function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, Ch
       socket.on('leaveRoom', (roomId) => {
         try {
           socket.leave(roomId);
-          console.log(`[SOCKET][MSG] leaveRoom`, { roomId, from: userId || '(anon)' });
-          if (roomMembers.has(roomId) && userId) {
+          console.log(`[SOCKET][MSG] leaveRoom`, { roomId });
+          if (roomMembers.has(roomId)) {
             roomMembers.get(roomId).delete(userId);
           }
         } catch (err) {
@@ -238,10 +204,8 @@ function initSocket(httpServer, { app, sessionMiddleware, allowedOriginsList, Ch
       socket.on('disconnect', () => {
         try {
           console.log(`[SOCKET][DISC]`, { sid: socket.id });
-          if (userId) {
-            onlineUsers.delete(userId);
-            for (const set of roomMembers.values()) set.delete(userId);
-          }
+          onlineUsers.delete(userId);
+          for (const set of roomMembers.values()) set.delete(userId);
         } catch (err) {
           console.log('[SOCKET][ERR]', { step: 'disconnect', message: err.message });
         }

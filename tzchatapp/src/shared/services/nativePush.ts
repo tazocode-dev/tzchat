@@ -70,7 +70,7 @@ async function registerTokenForUser(
     await api.post('/api/push/register', {
       token: normalizedToken,
       platform,
-      appVersion: (import.meta as any)?.env?.VITE_APP_VERSION || 'native-1.0.0',
+      appVersion: __APP_VERSION__,
     })
     if (generation !== lifecycleGeneration) {
       try { await api.post('/api/push/unregister', { token: normalizedToken }) } catch {}

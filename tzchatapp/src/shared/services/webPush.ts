@@ -124,7 +124,7 @@ async function registerForAuthenticatedUser(user: MeUser | null): Promise<WebPus
         {
           token,
           platform: 'web',
-          appVersion: (import.meta as any)?.env?.VITE_APP_VERSION || 'web-1.0.0',
+          appVersion: __APP_VERSION__,
         },
         { withCredentials: true }
       )

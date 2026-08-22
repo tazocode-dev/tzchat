@@ -34,7 +34,7 @@ async function listMine(req, res) {
 
 async function listOfUser(req, res) {
   try {
-    const data = await getUserImages(req.params.id, req);
+    const data = await getUserImages(req.params.id, req, getMyId(req));
     return res.json(data);
   } catch (err) {
     if (err instanceof ImageReadError) {

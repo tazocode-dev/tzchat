@@ -7,37 +7,59 @@ const { User } = require('@/models');
 const { requireCurrentActiveOptIn } = require('@/services/legal/termsPublicService');
 
 class ContactsError extends Error {
-  constructor(status, message) {
-    super(message);
+  constructor(status, codeOrMessage, message) {
+    super(message || codeOrMessage);
     this.status = status;
+    this.code = message ? codeOrMessage : undefined;
   }
 }
 
-const s = (v) => (typeof v === 'string' ? v.trim() : v ?? '');
+const MAX_CONTACT_HASHES = 2000;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/i;
+const INVALID_CONTACT_HASHES_CODE = 'INVALID_CONTACT_HASHES';
+const INVALID_CONTACT_HASHES_MESSAGE = '연락처 해시 배열이 올바르지 않습니다.';
+
+function invalidContactHashes() {
+  return new ContactsError(
+    400,
+    INVALID_CONTACT_HASHES_CODE,
+    INVALID_CONTACT_HASHES_MESSAGE,
+  );
+}
+
+function validateAndNormalizeContactHashes(hashesRaw) {
+  if (!Array.isArray(hashesRaw) || hashesRaw.length > MAX_CONTACT_HASHES) {
+    throw invalidContactHashes();
+  }
+
+  const hashes = [];
+  const seen = new Set();
+  for (const value of hashesRaw) {
+    if (typeof value !== 'string' || !SHA256_HEX_PATTERN.test(value)) {
+      throw invalidContactHashes();
+    }
+    const normalized = value.toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      hashes.push(normalized);
+    }
+  }
+  return hashes;
+}
 
 /*
    body: { hashes: string[] }
    - 앱에서 읽어온 연락처 전화번호를 클라이언트에서 SHA-256 후 전송
-   - 서버에서는 그대로 저장(중복 제거만)
+   - 서버는 SHA-256 hex 형식 검증, 소문자 정규화, 중복 제거 후 저장
 */
 async function saveContactHashes(userId, hashesRaw, dependencies = {}) {
-  const list = Array.isArray(hashesRaw) ? hashesRaw : [];
-  if (!list.length) {
-    throw new ContactsError(400, 'hashes 배열이 비어 있습니다.');
+  const hashes = validateAndNormalizeContactHashes(hashesRaw);
+
+  // 빈 배열은 저장이 아니라 기존 해시 삭제이므로 선택 동의 없이도 허용한다.
+  if (hashes.length > 0) {
+    const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
+    await requireOptIn(userId, 'contacts-consent', dependencies);
   }
-
-  // 문자열로 변환 + 공백 제거 + 간단 필터링
-  let hashes = list.map((h) => s(h)).filter((h) => h.length > 0);
-
-  // 중복 제거
-  hashes = Array.from(new Set(hashes));
-
-  if (!hashes.length) {
-    throw new ContactsError(400, '유효한 해시가 없습니다.');
-  }
-
-  const requireOptIn = dependencies.requireCurrentActiveOptIn || requireCurrentActiveOptIn;
-  await requireOptIn(userId, 'contacts-consent', dependencies);
 
   const UserModel = dependencies.UserModel || User;
   const updated = await UserModel.findByIdAndUpdate(
@@ -73,4 +95,12 @@ async function clearContactHashes(userId, dependencies = {}) {
   };
 }
 
-module.exports = { ContactsError, saveContactHashes, clearContactHashes };
+module.exports = {
+  ContactsError,
+  INVALID_CONTACT_HASHES_CODE,
+  INVALID_CONTACT_HASHES_MESSAGE,
+  MAX_CONTACT_HASHES,
+  clearContactHashes,
+  saveContactHashes,
+  validateAndNormalizeContactHashes,
+};

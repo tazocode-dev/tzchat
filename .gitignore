@@ -1,0 +1,7 @@
+# Operating-system metadata
+.DS_Store
+._*
+Thumbs.db
+
+# Non-portable local reference used only while comparing project structure
+/tzadmin

@@ -58,7 +58,7 @@ function makeSendHandler(matchType) {
       return res.json(createdReq.toObject());
     } catch (err) {
       if (err instanceof FriendRequestSendError) {
-        return res.status(err.status).json({ message: err.message });
+        return res.status(err.status).json({ ...(err.code ? { code: err.code } : {}), message: err.message });
       }
       logErr('[API][ERR]', { path: req.baseUrl + req.path, name: err?.name, message: err?.message });
       return res.status(500).json({ message: '서버 오류' });

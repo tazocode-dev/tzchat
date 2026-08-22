@@ -28,8 +28,8 @@ test('메인 사용자·친구 목록은 인증과 필수 완료 게이트를 �
 })
 
 test('인증 상태 조회와 온보딩 완료 API는 완료 게이트 앞에 남긴다', () => {
-  assert.deepEqual(handlerNames(accountRouter, 'get', '/me'), ['authFromJwtOrSession', 'me'])
-  assert.deepEqual(handlerNames(accountRouter, 'get', '/onboarding/status'), ['authFromJwtOrSession', 'status'])
-  assert.deepEqual(handlerNames(accountRouter, 'patch', '/onboarding/birth-year'), ['authFromJwtOrSession', 'birthYear'])
-  assert.deepEqual(handlerNames(accountRouter, 'patch', '/onboarding/gender'), ['authFromJwtOrSession', 'gender'])
+  assert.deepEqual(handlerNames(accountRouter, 'get', '/me'), ['authMiddleware', 'me'])
+  assert.deepEqual(handlerNames(accountRouter, 'get', '/onboarding/status'), ['authMiddleware', 'status'])
+  assert.deepEqual(handlerNames(accountRouter, 'patch', '/onboarding/birth-year'), ['authMiddleware', 'birthYear'])
+  assert.deepEqual(handlerNames(accountRouter, 'patch', '/onboarding/gender'), ['authMiddleware', 'gender'])
 })

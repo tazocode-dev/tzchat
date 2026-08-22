@@ -6,13 +6,12 @@
 // -------------------------------------------------------------
 const express = require('express');
 
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/system/push.controller');
 
 const router = express.Router();
-// 전역 가드: 로그인 + 탈퇴대기 차단
-router.use(requireLogin, blockIfPendingDeletion);
+// 공통 인증에서 로그인과 계정 상태를 함께 검증한다.
+router.use(authMiddleware);
 router.use(controller.requestLogger);
 
 router.post('/register', controller.register);

@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const { isValidObjectId } = mongoose;
 const { User, FriendRequest } = require('@/models');
 const { getUnreadTotal } = require('@/services/chat/chatRoomService');
+const { areUsersBlocked } = require('@/services/chat/blockPolicyService');
 
 class FriendRelationError extends Error {
   constructor(status, message) {
@@ -182,6 +183,10 @@ async function removeBlock(myId, targetId) {
 }
 
 async function getUserProfileWithRelation(myId, targetId) {
+  if (!isValidObjectId(targetId)) throw new FriendRelationError(400, '유효하지 않은 사용자 ID입니다.');
+  if (String(myId) !== String(targetId) && await areUsersBlocked(myId, targetId)) {
+    throw new FriendRelationError(404, '사용자를 찾을 수 없습니다.');
+  }
   const targetUser = await User.findById(targetId).select(SAFE_USER_FIELDS).lean();
   if (!targetUser) throw new FriendRelationError(404, '사용자를 찾을 수 없습니다.');
 

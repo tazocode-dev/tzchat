@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 운영 웹 번들이 로컬/사설 목적지나 비밀키를 포함하지 않는지 검사한다.
-import { readdirSync, statSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
 
 const DIST = 'dist'
 const FORBIDDEN_LITERALS = [
@@ -32,8 +32,91 @@ function collectFiles(dir, out = []) {
   return out
 }
 
+function verifyPwaManifest() {
+  const manifestFile = join(DIST, 'manifest.webmanifest')
+  if (!existsSync(manifestFile)) {
+    console.error('❌ [verifyBuild] dist/manifest.webmanifest가 없습니다.')
+    return false
+  }
+
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestFile, 'utf8'))
+  } catch {
+    console.error('❌ [verifyBuild] manifest.webmanifest가 유효한 JSON이 아닙니다.')
+    return false
+  }
+
+  let valid = true
+  const expected = {
+    id: '/',
+    start_url: '/',
+    scope: '/',
+    display: 'standalone',
+    theme_color: '#f7f5f2',
+    background_color: '#f7f5f2',
+  }
+  for (const [key, value] of Object.entries(expected)) {
+    if (manifest[key] !== value) {
+      console.error(`❌ [verifyBuild] manifest.${key}는 ${value}이어야 합니다.`)
+      valid = false
+    }
+  }
+
+  if (!Array.isArray(manifest.icons) || manifest.icons.length === 0) {
+    console.error('❌ [verifyBuild] PWA 아이콘이 정의되지 않았습니다.')
+    return false
+  }
+
+  const declaredSizes = new Set()
+  const distRoot = resolve(DIST)
+  for (const icon of manifest.icons) {
+    if (typeof icon.src !== 'string' || !icon.src.startsWith('/') || icon.src.includes('?') || icon.src.includes('#')) {
+      console.error(`❌ [verifyBuild] PWA 아이콘 경로가 잘못됐습니다: ${String(icon.src)}`)
+      valid = false
+      continue
+    }
+
+    const iconFile = resolve(DIST, icon.src.slice(1))
+    if (relative(distRoot, iconFile).startsWith('..') || !existsSync(iconFile)) {
+      console.error(`❌ [verifyBuild] PWA 아이콘 파일이 없습니다: ${icon.src}`)
+      valid = false
+      continue
+    }
+
+    const bytes = readFileSync(iconFile)
+    const pngSignature = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    if (!pngSignature || icon.type !== 'image/png' || bytes.length < 24) {
+      console.error(`❌ [verifyBuild] ${icon.src}의 확장자·MIME·실제 포맷을 PNG로 맞춰야 합니다.`)
+      valid = false
+      continue
+    }
+
+    const actualSize = `${bytes.readUInt32BE(16)}x${bytes.readUInt32BE(20)}`
+    if (icon.sizes !== actualSize) {
+      console.error(`❌ [verifyBuild] ${icon.src} 실제 크기(${actualSize})와 manifest sizes(${icon.sizes})가 다릅니다.`)
+      valid = false
+    }
+    if (typeof icon.purpose !== 'string' || !icon.purpose.split(/\s+/).includes('any')) {
+      console.error(`❌ [verifyBuild] ${icon.src}의 purpose에 any가 필요합니다.`)
+      valid = false
+    }
+    declaredSizes.add(icon.sizes)
+  }
+
+  for (const requiredSize of ['192x192', '512x512']) {
+    if (!declaredSizes.has(requiredSize)) {
+      console.error(`❌ [verifyBuild] PWA 필수 아이콘 ${requiredSize}가 없습니다.`)
+      valid = false
+    }
+  }
+  return valid
+}
+
 let failed = false
 const files = collectFiles(DIST)
+
+if (!verifyPwaManifest()) failed = true
 
 for (const file of files) {
   const content = readFileSync(file, 'utf8')

@@ -7,24 +7,24 @@
  *   - GET  /api/admin/migration/beta-to-basic/preview
  *       → 대상 건수만 조회 (dry-run)
  *   - POST /api/admin/migration/beta-to-basic
- *       body: { dryRun?: boolean }
- *       → 실제 업데이트 또는 dry-run
+ *       body: { dryRun: true } 또는
+ *             { dryRun: false, confirmation: 'BETA_TO_BASIC' }
+ *       → 명시적으로 확인된 실제 업데이트 또는 안전한 dry-run
  *
  * 주의:
- *   - 관리자만 접근 가능(아래 간단 가드 사용)
+ *   - 공통 인증과 DB 기반 master 권한 검사를 통과한 관리자만 접근 가능
  *   - 실행 전 반드시 백업 권장
  */
 
 const express = require('express');
 const router = express.Router();
 const controller = require('@/controllers/admin/betaMigration.controller');
-const requireLogin = require('@/middlewares/requireLogin');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const requireMaster = require('@/middlewares/requireMaster');
 
 // JWT payload나 클라이언트 응답값의 role을 신뢰하지 않고 매 요청마다 DB 권한을 확인한다.
-router.use(requireLogin, requireMaster);
+router.use(authMiddleware, requireMaster);
 router.get('/migration/beta-to-basic/preview', controller.preview);
 router.post('/migration/beta-to-basic', controller.execute);
-router.get('/migration/health', controller.health);
 
 module.exports = router;

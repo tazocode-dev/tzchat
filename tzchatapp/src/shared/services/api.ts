@@ -35,6 +35,27 @@ function joinUrl(base: string, path: string) {
   return `${b}${p}`
 }
 
+const AUTH_REDIRECT_PATHS = new Set([
+  '/login',
+  '/account/deletion-pending',
+  '/legal/consent',
+  '/onboarding',
+])
+
+export function normalizeAuthRedirectPath(path: string): string | null {
+  const raw = String(path || '').trim()
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.includes('\\')) return null
+
+  try {
+    const base = 'https://app.invalid'
+    const target = new URL(raw, base)
+    if (target.origin !== base || !AUTH_REDIRECT_PATHS.has(target.pathname)) return null
+    return `${target.pathname}${target.search}${target.hash}`
+  } catch {
+    return null
+  }
+}
+
 // 다른 모듈이 base URL 정규화 로직을 별도로 재구현하지 않도록 공개한다 (지침 §3).
 export const ENV_BASE = API_BASE_URL
 const USE_COOKIES = true
@@ -204,17 +225,66 @@ export function clearAccountScopedLocalData() {
   } catch {}
 }
 
-// [추가] 안전 리다이렉트 유틸 (router 순환참조 방지)
+// HTTP 모듈이 router를 역참조하지 않도록 허용된 인증 화면으로만 전체 페이지 이동한다.
 function safeRedirect(path: string) {
-  try {
-    import('@/router').then(({ default: router }) => {
-      if (router.currentRoute.value.fullPath !== path) router.replace(path)
-    }).catch(() => {
-      if (window.location.pathname !== path) window.location.href = path
-    })
-  } catch {
-    if (window.location.pathname !== path) window.location.href = path
+  if (typeof window === 'undefined') return
+  const target = normalizeAuthRedirectPath(path)
+  if (!target) return
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`
+  if (current !== target) window.location.replace(target)
+}
+
+export type AccountRestrictionAction = {
+  path: '/account/deletion-pending' | '/login'
+  clearCredentials: boolean
+}
+
+function isPublicLoginRequest(url: string): boolean {
+  return url.startsWith('/api/login')
+    || url.startsWith('/api/auth/phone/')
+    || url.startsWith('/api/auth/email/')
+}
+
+export function accountRestrictionActionForApiError(
+  status: number | undefined,
+  code: unknown,
+  url: string,
+): AccountRestrictionAction | null {
+  const normalizedCode = String(code || '')
+  if (
+    status === 423
+    || normalizedCode === 'PENDING_DELETION'
+    || normalizedCode === 'ACCOUNT_PENDING_DELETION'
+  ) {
+    return { path: '/account/deletion-pending', clearCredentials: false }
   }
+
+  if (
+    status === 403
+    && (normalizedCode === 'ACCOUNT_SUSPENDED' || normalizedCode === 'ACCOUNT_DELETED')
+    && !isPublicLoginRequest(url)
+  ) {
+    return { path: '/login', clearCredentials: true }
+  }
+
+  return null
+}
+
+export function isPublicApiRequest(url: string, method: string | undefined): boolean {
+  const path = String(url || '').split(/[?#]/, 1)[0]
+  const normalizedMethod = String(method || 'get').toLowerCase()
+  if (
+    path.startsWith('/api/login')
+    || path.startsWith('/api/auth/phone/')
+    || path.startsWith('/api/auth/email/')
+    || path.startsWith('/api/health')
+    || path.startsWith('/api/userinfo')
+  ) return true
+  if (normalizedMethod !== 'get') return false
+  return path === '/api/terms/active'
+    || path === '/api/terms/latest'
+    || /^\/api\/terms\/[^/]+\/(?:active|versions)$/.test(path)
+    || path === '/api/legal/consents/required'
 }
 
 // ------------------ Access Token 갱신 (지침 §3: 동시 갱신 요청을 하나로 합친다) ------------------
@@ -289,11 +359,7 @@ api.interceptors.response.use(
     const isAuthBootstrap = authRequestMode === 'bootstrap'
 
     // 🔹 공개 API 예외 처리
-    const isPublic =
-      url.startsWith('/api/terms/') ||
-      url.startsWith('/api/login') ||
-      url.startsWith('/api/health') ||
-      url.startsWith('/api/userinfo')
+    const isPublic = isPublicApiRequest(url, (err.config as any)?.method)
     const isRefreshCall = url.startsWith('/api/token/refresh')
     const originalConfig = authConfig
 
@@ -359,9 +425,10 @@ api.interceptors.response.use(
       safeRedirect(`/login?redirect=${encodeURIComponent(current)}`)
     }
 
-    // 423: 탈퇴신청 상태 → 전용 페이지로
-    if (status === 423 || code === 'PENDING_DELETION') {
-      safeRedirect('/account/deletion-pending')
+    const restrictionAction = accountRestrictionActionForApiError(status, code, url)
+    if (restrictionAction) {
+      if (restrictionAction.clearCredentials) clearAuthToken()
+      safeRedirect(restrictionAction.path)
     }
 
     // 서버가 세션 도중 새 필수 약관 또는 잘못된 프로필 상태를 발견한 경우에도

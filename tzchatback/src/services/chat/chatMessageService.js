@@ -7,63 +7,94 @@ const mongoose = require('mongoose');
 const { ChatRoom, Message } = require('@/models');
 const { toAbsoluteMediaUrl } = require('@/utils/mediaUrl');
 const { getHiddenAt } = require('@/services/chat/chatRoomService');
+const { normalizeUserId, areUsersBlocked } = require('@/services/chat/blockPolicyService');
+const { validateUserGeneratedText } = require('@/services/system/ugcContentPolicyService');
 
 class ChatMessageError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-// ✅ 이미지 메시지 저장값을 항상 상대경로(/uploads/...)로 정규화
-function normalizeUploadPathForDb(input) {
-  if (!input) return '';
-  const s = String(input).trim();
-
-  // 절대 URL이면 /uploads/... 부분만 떼서 저장
-  if (/^https?:\/\//i.test(s)) {
-    try {
-      const url = new URL(s);
-      if (url.pathname.startsWith('/uploads/')) return url.pathname;
-      return s; // uploads가 아니면 그대로 (원치 않으면 ''로 바꿔도 됨)
-    } catch {
-      // 실패 시 아래로
-    }
+// 업로드 API가 반환하는 현재 경로(/YYYY/MM/DD/<roomId>/file)와
+// 날짜 폴더 도입 전 경로(/<roomId>/file)만 신규 메시지에 허용한다.
+// 과거 DB에 저장된 GIF 메시지는 조회 시 이 검증을 다시 거치지 않으므로 계속 표시된다.
+function validateChatImagePathForDb(input, roomId) {
+  if (typeof input !== 'string') {
+    throw new ChatMessageError(400, '이미지 경로가 올바르지 않습니다.', 'INVALID_CHAT_IMAGE_PATH');
   }
-
-  // 상대경로 업로드
-  if (s.startsWith('/uploads/')) return s;
-  if (s.startsWith('uploads/')) return `/${s}`;
-  return s;
+  const value = input.trim();
+  const normalizedRoomId = String(roomId || '').trim();
+  const safeRoomId = normalizedRoomId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pathPattern = new RegExp(
+    `^/uploads/chat/(?:\\d{4}/\\d{2}/\\d{2}/)?${safeRoomId}/[a-f0-9]{32}\\.(?:jpe?g|png|webp)$`,
+    'i'
+  );
+  if (!normalizedRoomId || value.includes('\\') || value.includes('%') || !pathPattern.test(value)) {
+    throw new ChatMessageError(400, '이미지 경로가 올바르지 않습니다.', 'INVALID_CHAT_IMAGE_PATH');
+  }
+  return value;
 }
 
 /* ===========================================
  * [1] 메시지 전송 (텍스트/이미지)
  * =========================================== */
-async function sendMessage(roomId, myId, { content, type }, req) {
+async function assertCanUseChatRoom(roomId, myId, dependencies = {}) {
+  let normalizedMyId;
+  try {
+    normalizedMyId = normalizeUserId(myId, '요청자');
+  } catch (error) {
+    throw new ChatMessageError(error.status || 400, error.message);
+  }
+  const ChatRoomModel = dependencies.ChatRoomModel || ChatRoom;
+  const checkBlocked = dependencies.areUsersBlocked || areUsersBlocked;
+  const chatRoom = await ChatRoomModel.findById(roomId);
+  const isMember = chatRoom?.participants?.some(participant => String(participant?._id || participant) === normalizedMyId);
+  if (!chatRoom || !isMember) throw new ChatMessageError(403, '채팅방 접근 권한 없음');
+  const partner = (chatRoom.participants || [])
+    .find(participant => String(participant?._id || participant) !== normalizedMyId);
+  if (!partner || await checkBlocked(normalizedMyId, String(partner?._id || partner), dependencies)) {
+    throw new ChatMessageError(403, '차단 관계에서는 메시지를 전송할 수 없습니다.');
+  }
+  return chatRoom;
+}
+
+async function sendMessage(roomId, myId, { content, type }, req, dependencies = {}) {
   const myObjId = new mongoose.Types.ObjectId(String(myId));
 
-  if (type !== 'image' && (!content || !content.trim())) {
-    throw new ChatMessageError(400, '메시지 내용이 비어 있습니다');
+  const normalizedType = type == null ? 'text' : String(type).trim();
+  if (!['text', 'image'].includes(normalizedType)) {
+    throw new ChatMessageError(400, '지원하지 않는 메시지 형식입니다.', 'INVALID_CHAT_MESSAGE_TYPE');
   }
 
-  const chatRoom = await ChatRoom.findById(roomId);
-  const isMember = chatRoom?.participants?.some(p => String(p) === String(myId));
-  if (!chatRoom || !isMember) throw new ChatMessageError(403, '채팅방 접근 권한 없음');
+  let normalizedContent;
+  if (normalizedType === 'image') {
+    normalizedContent = validateChatImagePathForDb(content, roomId);
+  } else {
+    try {
+      normalizedContent = validateUserGeneratedText(content, { field: 'chatMessage' });
+    } catch (error) {
+      throw new ChatMessageError(error.status || 400, error.message, error.code);
+    }
+  }
+
+  const chatRoom = await assertCanUseChatRoom(roomId, myId, dependencies);
+  const MessageModel = dependencies.MessageModel || Message;
 
   const messageData = {
-    chatRoom: roomId, sender: myObjId, type: type || 'text',
+    chatRoom: roomId, sender: myObjId, type: normalizedType,
     readBy: [myObjId], content: '', imageUrl: ''
   };
 
-  if (type === 'image') {
-    // ✅ DB에는 /uploads/... 상대경로만 저장
-    messageData.imageUrl = normalizeUploadPathForDb(content);
+  if (normalizedType === 'image') {
+    messageData.imageUrl = normalizedContent;
   } else {
-    messageData.content = content;
+    messageData.content = normalizedContent;
   }
 
-  let message = await Message.create(messageData);
+  let message = await MessageModel.create(messageData);
   chatRoom.messages.push(message._id);
 
   if (typeof chatRoom.setLastMessageAndTouch === 'function') {
@@ -84,7 +115,7 @@ async function sendMessage(roomId, myId, { content, type }, req) {
   }
   await chatRoom.save();
 
-  message = await Message.findById(message._id).populate('sender', 'nickname').lean();
+  message = await MessageModel.findById(message._id).populate('sender', 'nickname').lean();
 
   // ✅ 응답/소켓에는 절대 URL로 정규화(https + 도메인 강제)
   message.imageUrl = toAbsoluteMediaUrl(message.imageUrl || '', req);
@@ -175,7 +206,8 @@ async function markAsRead(roomId, myId) {
 
 module.exports = {
   ChatMessageError,
-  normalizeUploadPathForDb,
+  validateChatImagePathForDb,
+  assertCanUseChatRoom,
   sendMessage,
   notifyNewMessage,
   markAsRead,

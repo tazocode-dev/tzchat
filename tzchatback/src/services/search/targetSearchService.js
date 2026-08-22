@@ -5,6 +5,7 @@
 
 const mongoose = require('mongoose');
 const { User } = require('@/models');
+const { getBlockedUserIdSet, buildDiscoverableUserFilter } = require('@/services/chat/blockPolicyService');
 
 class TargetSearchError extends Error {
   constructor(status, message) {
@@ -66,7 +67,8 @@ async function searchUsers(myId, body) {
     regions.some((r) => r.region1 === '전체') ||
     regions.some((r) => r.region2 === '전체');
 
-  const andFilters = [{ _id: { $ne: myId } }];
+  const blockedUserIds = await getBlockedUserIdSet(myId);
+  const andFilters = [buildDiscoverableUserFilter(myId, blockedUserIds)];
 
   // 0) 동일 전화번호 유저 제외 (기본 보호)
   if (myPhoneHash) {
@@ -108,7 +110,8 @@ async function searchUsers(myId, body) {
 ========================= */
 async function getRecommendedTargets(viewerId, { limit: limitRaw, exclude, seedDay }) {
   const limit = Math.min(Number(limitRaw || 50), 200);
-  const excludeSet = new Set(parseCommaIds(exclude));
+  const blockedUserIds = await getBlockedUserIdSet(viewerId);
+  const excludeSet = new Set([...parseCommaIds(exclude), ...blockedUserIds]);
 
   const dayjs = require('dayjs');
   const tz = require('dayjs/plugin/timezone');
@@ -147,7 +150,7 @@ async function getRecommendedTargets(viewerId, { limit: limitRaw, exclude, seedD
   // 3단계: 추천 대상 쿼리 구성
   const andFilters = [
     { _id: { $in: candidateIds } },
-    { isDeleted: { $ne: true } },
+    buildDiscoverableUserFilter(viewerId, blockedUserIds),
     { isPrivate: { $ne: true } },
   ];
 

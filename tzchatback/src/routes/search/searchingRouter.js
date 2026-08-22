@@ -9,12 +9,11 @@
 // - PATCH /api/search/marriage
 // -------------------------------------------------------------
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/search/searchSettings.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion, controller.requestLogger);
+router.use(authMiddleware, controller.requestLogger);
 
 router.patch('/search/year', controller.patchYear);
 router.patch('/search/regions', controller.patchRegions);

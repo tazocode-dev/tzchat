@@ -14,63 +14,48 @@ import {
   toastController,
 } from '@ionic/vue'
 
-//로그인 전
+// 로그인 전 화면
 import LoginPage from '@/features/auth/pages/LoginPage.vue'
 import OnboardingPage from '@/features/auth/pages/OnboardingPage.vue'
 import HomePage from '@/layouts/HomePage.vue'
 
-// ✅ 관리자(master) 전용 아이디/비밀번호 로그인 — 일반 사용자 로그인(이메일 인증)과 분리
+// 관리자(master) 전용 아이디/비밀번호 로그인은 일반 사용자의 전화번호 인증과 분리한다.
 import AdminLoginPage from '@/features/auth/pages/AdminLoginPage.vue'
 
-import Page1 from '@/features/search/pages/1_alluser.vue'
+// 메인 탭
+import AllUsersPage from '@/features/search/pages/AllUsersPage.vue'
+import TargetSearchPage from '@/features/search/pages/TargetSearchPage.vue'
+import FriendsPage from '@/features/friends/pages/FriendsPage.vue'
+import ChatListPage from '@/features/chat/pages/ChatListPage.vue'
+import MyProfilePage from '@/features/profile/pages/MyProfilePage.vue'
+import SettingsPage from '@/features/settings/pages/SettingsPage.vue'
 
-//Topmenu
-import Pagetarget from '@/features/search/pages/2_target_merge.vue'
-import Page3 from '@/features/friends/pages/3_list.vue'
-import Page4 from '@/features/chat/pages/4_chatList.vue'
-import Page6 from '@/features/profile/pages/6_profile.vue'
-import Page7 from '@/features/settings/pages/7_setting.vue'
+// 친구 탭 하위 목록
+import BlockedUsersPage from '@/features/friends/pages/BlockedUsersPage.vue'
+import FriendsListPage from '@/features/friends/pages/FriendsListPage.vue'
+import ReceivedFriendRequestsPage from '@/features/friends/pages/ReceivedFriendRequestsPage.vue'
+import SentFriendRequestsPage from '@/features/friends/pages/SentFriendRequestsPage.vue'
 
-//list_sub
-import Page31 from '@/features/friends/pages/Page_Block.vue'
-import Page32 from '@/features/friends/pages/Page_Friend.vue'
-import Page33 from '@/features/friends/pages/Page_Receive.vue'
-import Page34 from '@/features/friends/pages/Page_Send.vue'
-
-// important_parts
-import PageuserProfile from '@/features/profile/pages/PageuserProfile.vue'
-import PagepremiumProfile from '@/features/profile/pages/PagepremiumProfile.vue'
+// 사용자 프로필과 채팅
+import UserProfilePage from '@/features/profile/pages/UserProfilePage.vue'
+import SpeedUserProfilePage from '@/features/profile/pages/SpeedUserProfilePage.vue'
 import ChatRoomPage from '@/features/chat/pages/ChatRoomPage.vue'
 
 // notice
 import NoticeEditPage from '@/features/admin/pages/detail/NoticeEditPage.vue'
 
-// setting
-import setting01 from '@/features/settings/components/setlist/0001_s_notice.vue'
-import setting02 from '@/features/settings/components/setlist/0002_s.vue'
-import setting03 from '@/features/settings/components/setlist/0003_s.vue'
-import setting04 from '@/features/settings/components/setlist/0004_s.vue'
-import setting08 from '@/features/settings/components/setlist/0008_s.vue'
-import setting09 from '@/features/settings/components/setlist/0009_s.vue'
-import setting10 from '@/features/settings/components/setlist/0010_s.vue'
-import setting11 from '@/features/settings/components/setlist/0011_s.vue'
-import setting12 from '@/features/settings/components/setlist/0012_s.vue'
-import setting13 from '@/features/settings/components/setlist/0013_s.vue'
-import setting14 from '@/features/settings/components/setlist/0014_s.vue'
-import setting15 from '@/features/settings/components/setlist/0015_s.vue'
-import setting16 from '@/features/settings/components/setlist/0016_s.vue'
-import setting17 from '@/features/settings/components/setlist/0017_s.vue'
-import setting18 from '@/features/settings/components/setlist/0018_s.vue'
-import setting19 from '@/features/settings/components/setlist/0019_s_pwchange.vue'
-import setting20 from '@/features/settings/components/setlist/0020_s_delete.vue'
-import setting21 from '@/features/settings/components/setlist/0021_s_auth_info.vue'
+// 설정 하위 화면
+import NoticeListPage from '@/features/settings/pages/NoticeListPage.vue'
+import PasswordChangePage from '@/features/settings/pages/PasswordChangePage.vue'
+import AccountDeletionPage from '@/features/settings/pages/AccountDeletionPage.vue'
+import AuthInfoPage from '@/features/settings/pages/AuthInfoPage.vue'
 
 // admin — 실제 운영 기능만 필요할 때 로드한다.
-const AdminDashboard = () => import('@/features/admin/pages/adminlist/0000_AdminDashboard.vue')
-const AdminVisualTestPage = () => import('@/features/admin/pages/AdminVisualTestPage.vue')
-const AdminMembers = () => import('@/features/admin/pages/adminlist/0003_a.vue')
-const AdminNotices = () => import('@/features/admin/pages/adminlist/0006_a.vue')
-const AdminMigration = () => import('@/features/admin/pages/adminlist/0015_a.vue')
+const AdminDashboardPage = () => import('@/features/admin/pages/AdminDashboardPage.vue')
+const AdminMembersPage = () => import('@/features/admin/pages/AdminMembersPage.vue')
+const AdminNoticesPage = () => import('@/features/admin/pages/AdminNoticesPage.vue')
+const AdminReportsPage = () => import('@/features/admin/pages/AdminReportsPage.vue')
+const AdminMigrationPage = () => import('@/features/admin/pages/AdminMigrationPage.vue')
 
 // ✅ 동의 전용 페이지
 const AgreementPage = () => import('@/features/legal/AgreementPage.vue')
@@ -85,8 +70,8 @@ const DeletionPending = () => import('@/features/account/pages/DeletionPending.v
 
 const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/login' },
-  // ✅ 일반 사용자 로그인: 이메일 인증(6자리 코드) 방식
-  { path: '/login', component: LoginPage },
+  // 일반 사용자는 전화번호 문자 인증으로 가입·로그인한다.
+  { path: '/login', name: 'Login', component: LoginPage },
 
   // ✅ 관리자(master) 전용 로그인 — 메인 네비게이션에는 노출하지 않음
   { path: '/admin/login', name: 'AdminLogin', component: AdminLoginPage, meta: { public: true } },
@@ -126,74 +111,70 @@ const routes: RouteRecordRaw[] = [
     component: HomePage,
     meta: { requiresAuth: true },
     children: [
-      { path: '', component: Page6 },
+      { path: '', name: 'HomeDefault', component: MyProfilePage },
 
       { path: 'membership/buy', redirect: '/home/6page' },
       { path: 'membership/history', redirect: '/home/6page' },
 
-      { path: '1page', component: Page1 },
-      { path: 'targetpage', component: Pagetarget },
-      { path: '3page', component: Page3 },
+      { path: '1page', name: 'AllUsers', component: AllUsersPage },
+      { path: 'targetpage', name: 'TargetSearch', component: TargetSearchPage },
+      { path: '3page', name: 'Friends', component: FriendsPage },
 
-      { path: '4page', component: Page4 },
-      { path: '6page', component: Page6 },
-      { path: '7page', component: Page7 },
+      { path: '4page', name: 'ChatList', component: ChatListPage },
+      { path: '6page', name: 'MyProfile', component: MyProfilePage },
+      { path: '7page', name: 'Settings', component: SettingsPage },
 
-      { path: '31page', component: Page31 },
-      { path: '32page', component: Page32 },
-      { path: '33page', component: Page33 },
-      { path: '34page', component: Page34 },
-      { path: 'user/:id', component: PageuserProfile, props: true },
+      { path: '31page', name: 'BlockedUsers', component: BlockedUsersPage },
+      { path: '32page', name: 'FriendList', component: FriendsListPage },
+      { path: '33page', name: 'ReceivedFriendRequests', component: ReceivedFriendRequestsPage },
+      { path: '34page', name: 'SentFriendRequests', component: SentFriendRequestsPage },
+      { path: 'user/:id', name: 'UserProfile', component: UserProfilePage, props: true },
 
       {
         path: 'speeduser/:id',
-        component: PagepremiumProfile,
+        name: 'SpeedUserProfile',
+        component: SpeedUserProfilePage,
         props: true,
         alias: ['/home/premiumuser/:id', '/home/premuimuser/:id'],
       },
 
-      { path: 'chat/:id', component: ChatRoomPage, props: true },
+      { path: 'chat/:id', name: 'ChatRoom', component: ChatRoomPage, props: true },
 
       { path: 'purchase/main', redirect: '/home/6page' },
 
-      { path: 'setting/0001', component: setting01 },
-      { path: 'setting/0002', component: setting02 },
+      { path: 'setting/0001', name: 'NoticeList', component: NoticeListPage },
       { path: 'setting/0002/write', redirect: '/home/admin/notices/write' },
       { path: 'setting/0002/edit/:id', redirect: (to) => `/home/admin/notices/edit/${to.params.id}` },
 
-      { path: 'setting/0003', component: setting03 },
-      { path: 'setting/0004', component: setting04 },
       { path: 'setting/0005', redirect: '/home/legals/v2/privacy' },
       { path: 'setting/0006', redirect: '/home/legals/v2/terms' },
       { path: 'setting/0007', redirect: '/home/legals/v2/youth-policy' },
-      { path: 'setting/0008', component: setting08 },
-      { path: 'setting/0009', component: setting09 },
-      { path: 'setting/0010', component: setting10 },
-      { path: 'setting/0011', component: setting11 },
-      { path: 'setting/0012', component: setting12 },
-      { path: 'setting/0013', component: setting13 },
-      { path: 'setting/0014', component: setting14 },
-      { path: 'setting/0015', component: setting15 },
-      { path: 'setting/0016', component: setting16 },
-      { path: 'setting/0017', component: setting17 },
-      { path: 'setting/0018', component: setting18 },
-      { path: 'setting/0019', component: setting19 },
-      { path: 'setting/0020', component: setting20 },
-      { path: 'setting/0021', component: setting21 },
+      { path: 'setting/0019', name: 'PasswordChange', component: PasswordChangePage },
+      { path: 'setting/0020', name: 'AccountDeletion', component: AccountDeletionPage },
+      { path: 'setting/0021', name: 'AuthInfo', component: AuthInfoPage },
+      {
+        path: 'setting/:legacy(\\d{4})',
+        name: 'LegacySettings',
+        redirect: (to) => ['0008', '0009'].includes(String(to.params.legacy))
+          ? '/home/6page'
+          : '/home/7page',
+      },
 
-      { path: 'admin', component: AdminDashboard, meta: { requiresMaster: true } },
-      { path: 'admin-test', component: AdminVisualTestPage, meta: { requiresMaster: true } },
-      { path: 'admin/members', component: AdminMembers, meta: { requiresMaster: true } },
-      { path: 'admin/notices', component: AdminNotices, meta: { requiresMaster: true } },
-      { path: 'admin/notices/write', component: NoticeEditPage, meta: { requiresMaster: true } },
-      { path: 'admin/notices/edit/:id', component: NoticeEditPage, meta: { requiresMaster: true }, props: true },
-      { path: 'admin/migration', component: AdminMigration, meta: { requiresMaster: true } },
+      { path: 'admin', name: 'AdminDashboard', component: AdminDashboardPage, meta: { requiresMaster: true } },
+      { path: 'admin/members', name: 'AdminMembers', component: AdminMembersPage, meta: { requiresMaster: true } },
+      { path: 'admin/notices', name: 'AdminNotices', component: AdminNoticesPage, meta: { requiresMaster: true } },
+      { path: 'admin/reports', name: 'AdminReports', component: AdminReportsPage, meta: { requiresMaster: true } },
+      { path: 'admin/notices/write', name: 'AdminNoticeCreate', component: NoticeEditPage, meta: { requiresMaster: true } },
+      { path: 'admin/notices/edit/:id', name: 'AdminNoticeEdit', component: NoticeEditPage, meta: { requiresMaster: true }, props: true },
+      { path: 'admin/migration', name: 'AdminMigration', component: AdminMigrationPage, meta: { requiresMaster: true } },
       {
         path: 'admin/:legacy(\\d{4})',
+        name: 'LegacyAdmin',
         redirect: (to) => {
           const redirects: Record<string, string> = {
             '0003': '/home/admin/members',
             '0006': '/home/admin/notices',
+            '0007': '/home/admin/reports',
             '0015': '/home/admin/migration',
           }
           return redirects[String(to.params.legacy)] || '/home/admin'

@@ -13,16 +13,21 @@
 const express = require('express');
 const router = express.Router();
 
-const requireLogin = require('@/middlewares/authMiddleware');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/admin/adminMonitor.controller');
+const reportController = require('@/controllers/admin/adminReport.controller');
+const userModerationController = require('@/controllers/admin/userModeration.controller');
 
-router.use(requireLogin, controller.requireMaster, controller.requestLogger);
+router.use(authMiddleware, controller.requireMaster, controller.requestLogger);
 
 router.get('/heartbeat', controller.heartbeat);
 router.get('/db-ping', controller.dbPing);
 router.get('/online', controller.online);
 router.get('/logs', controller.logs);
 router.get('/users', controller.users);
+router.patch('/users/:id/suspension', userModerationController.updateSuspension);
+router.get('/reports', reportController.list);
+router.patch('/reports/:id/status', reportController.updateStatus);
 router.post('/push/test', controller.pushTest);
 
 module.exports = router;

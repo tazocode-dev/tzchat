@@ -1,4 +1,3 @@
-/* /public/firebase-messaging-sw.js */
 self.addEventListener('push', function (event) {
   const data = event.data ? event.data.json() : {};
   const n = data.notification || {};
@@ -6,24 +5,22 @@ self.addEventListener('push', function (event) {
   const body  = n.body  || '';
   const extra = data.data || {};
 
-  console.log('[SW] push:', { title, body, extra });
-
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       data: extra,
-      icon: '/icons/icon-192.png',   // 없으면 제거 가능
-      badge: '/icons/badge-72.png'   // 없으면 제거 가능
+      icon: '/icons/icon-192.png'
     })
   );
 });
 
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
-  const roomId = event.notification?.data?.roomId || '';
+  const rawRoomId = event.notification?.data?.roomId;
+  const roomId = typeof rawRoomId === 'string' && /^[a-f\d]{24}$/i.test(rawRoomId)
+    ? rawRoomId
+    : '';
   const targetUrl = roomId ? `/home/chat/${roomId}` : '/';
-
-  console.log('[SW] click →', targetUrl);
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

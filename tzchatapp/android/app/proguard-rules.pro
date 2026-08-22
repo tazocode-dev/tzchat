@@ -45,11 +45,8 @@
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
 
-# [ADD] Capacitor 공식 플러그인(예: local-notifications, geolocation) 패키지 보존
+# 설치된 Capacitor 공식 플러그인 패키지 보존
 -keep class com.capacitorjs.plugins.** { *; }
-
-# [ADD] Capacitor Community AdMob 플러그인 보존
--keep class com.getcapacitor.community.admob.** { *; }
 
 ########## 네트워킹(예: Retrofit/OkHttp) — 사용 시 활성화 ##########
 #-keep class retrofit2.** { *; }

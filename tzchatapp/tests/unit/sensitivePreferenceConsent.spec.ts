@@ -6,9 +6,9 @@ import {
   ensureCurrentSensitivePreferenceConsent,
   isSensitiveInformationConsentRequiredError,
 } from '@/features/profile/services/sensitivePreferenceConsent'
-import ModalPreference from '@/features/profile/components/Modal_preference.vue'
-import SearchPreferenceModal from '@/features/profile/components/Search_Preference_Modal.vue'
-import profileSource from '@/features/profile/pages/6_profile.vue?raw'
+import ModalPreference from '@/features/profile/components/PreferenceEditModal.vue'
+import SearchPreferenceEditModal from '@/features/profile/components/SearchPreferenceEditModal.vue'
+import profileSource from '@/features/profile/pages/MyProfilePage.vue?raw'
 
 const mocks = vi.hoisted(() => ({ apiPatch: vi.fn() }))
 vi.mock('@/shared/services/api', () => ({
@@ -170,7 +170,7 @@ describe('민감정보 동의 403 모달 처리', () => {
   test('검색 성향 저장 403은 동의 안내를 보이고 updated를 emit하지 않는다', async () => {
     document.body.innerHTML = '<ion-app></ion-app>'
     mocks.apiPatch.mockRejectedValue(consentError)
-    const wrapper = mount(SearchPreferenceModal, { ...modalOptions, props: { message: '' } })
+    const wrapper = mount(SearchPreferenceEditModal, { ...modalOptions, props: { message: '' } })
     await nextTick()
 
     const select = document.querySelector('.preference-select') as HTMLSelectElement
@@ -191,7 +191,7 @@ describe('민감정보 동의 403 모달 처리', () => {
     vi.useFakeTimers()
     document.body.innerHTML = '<ion-app></ion-app>'
     mocks.apiPatch.mockResolvedValue({ data: { success: true } })
-    const wrapper = mount(SearchPreferenceModal, { ...modalOptions, props: { message: '' } })
+    const wrapper = mount(SearchPreferenceEditModal, { ...modalOptions, props: { message: '' } })
     await nextTick()
 
     const select = document.querySelector('.preference-select') as HTMLSelectElement

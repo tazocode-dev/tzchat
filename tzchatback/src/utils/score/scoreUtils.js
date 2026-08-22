@@ -1,6 +1,6 @@
 // lib/score/scoreUtils.js
 // tzchat 프로젝트 - 점수 산식 유틸
-// - distribution.js 메모의 '반감기 12h'와 정합되는 recency 함수 제공
+// - 프론트 distributedSelection.js의 '반감기 12h'와 정합되는 recency 함수 제공
 // - 활동치 정규화 + 가중합 + 노출 점수 산출
 
 const HALF_LIFE_HOURS = 12;

@@ -5,14 +5,13 @@
 // - index.js 에서 app.use('/api', ...)로 마운트됨 → 내부 경로에 /api 금지
 // -------------------------------------------------------------
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/userProfile.controller');
 
 const router = express.Router();
 
-// 전역 인증/차단 미들웨어 + 라우터 전용 로깅
-router.use(requireLogin, blockIfPendingDeletion, controller.requestLogger);
+// 공통 인증·계정 상태 검증 + 라우터 전용 로깅
+router.use(authMiddleware, controller.requestLogger);
 
 router.put('/update-nickname', controller.patchNickname);
 router.patch('/user/region', controller.patchRegion);

@@ -82,6 +82,7 @@ test('최종 DB 조건은 현재 배열 길이를 제한해 동시 요청의 3�
         onUpdate: filter => { updateFilter = filter },
       }),
       createVariantsAndSave: fakeVariants,
+      inspectImageFile: async () => {},
     }),
     error => error.status === 409 && error.message === PROFILE_IMAGE_LIMIT_MESSAGE,
   )
@@ -106,6 +107,7 @@ test('2장 이하 업로드는 조건부 update로 저장하고 생성 결과를
       },
     }),
     createVariantsAndSave: fakeVariants,
+    inspectImageFile: async () => {},
   })
 
   assert.deepEqual(updateFilter['profileImages.0'], { $exists: false })

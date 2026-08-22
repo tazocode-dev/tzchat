@@ -6,20 +6,67 @@
 const { Notice } = require('@/models');
 
 class NoticeError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-function isMasterFromReq(req) {
-  const role =
-    (req._urole && String(req._urole)) ||
-    (req.auth?.role && String(req.auth.role)) ||
-    (req.user?.role && String(req.user.role)) ||
-    (req.session?.user?.role && String(req.session.user.role)) ||
-    '';
-  return role === 'master';
+const NOTICE_LIMITS = Object.freeze({ title: 120, category: 40, content: 50000 });
+const INVALID_NOTICE_INPUT = 'INVALID_NOTICE_INPUT';
+
+function invalidNotice(message) {
+  throw new NoticeError(400, message, INVALID_NOTICE_INPUT);
+}
+
+function validateNoticeBody(body, { partial = false, now = () => new Date() } = {}) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    invalidNotice('공지 입력 형식이 올바르지 않습니다.');
+  }
+
+  const result = {};
+  const has = key => Object.prototype.hasOwnProperty.call(body, key);
+  const readText = (key, label, { required = false } = {}) => {
+    if (!has(key)) {
+      if (required && !partial) invalidNotice(`${label}을(를) 입력해 주세요.`);
+      return;
+    }
+    if (typeof body[key] !== 'string') invalidNotice(`${label} 형식이 올바르지 않습니다.`);
+    const value = body[key].trim();
+    if (required && !value) invalidNotice(`${label}을(를) 입력해 주세요.`);
+    if (value.length > NOTICE_LIMITS[key]) {
+      invalidNotice(`${label}은(는) ${NOTICE_LIMITS[key]}자 이내로 입력해 주세요.`);
+    }
+    result[key] = value;
+  };
+
+  readText('title', '제목', { required: true });
+  readText('content', '본문', { required: true });
+  readText('category', '분류');
+
+  if (has('isPublished')) {
+    if (typeof body.isPublished !== 'boolean') invalidNotice('공개 상태 형식이 올바르지 않습니다.');
+    result.isPublished = body.isPublished;
+  } else if (!partial) {
+    result.isPublished = true;
+  }
+
+  if (has('publishedAt')) {
+    if (body.publishedAt == null || body.publishedAt === '' || typeof body.publishedAt === 'boolean') {
+      invalidNotice('게시 일시가 올바르지 않습니다.');
+    }
+    const publishedAt = new Date(body.publishedAt);
+    if (Number.isNaN(publishedAt.getTime())) invalidNotice('게시 일시가 올바르지 않습니다.');
+    result.publishedAt = publishedAt;
+  } else if (!partial) {
+    result.publishedAt = now();
+  }
+
+  if (partial && !Object.keys(result).length) {
+    invalidNotice('수정할 공지 내용이 없습니다.');
+  }
+  return result;
 }
 
 // 리스트 (공개) — 공개 글만 노출
@@ -51,32 +98,26 @@ async function listManagedNotices({ skip, limit }) {
     .lean();
 }
 
-// 상세 (공개) — 마스터는 비공개 글도 열람 가능
-async function getNotice(id, req) {
-  const master = isMasterFromReq(req);
+// 공개 상세는 요청의 세션·JWT 역할과 무관하게 게시 상태만 조회한다.
+async function getPublishedNotice(id) {
+  const doc = await Notice.findOne({ _id: id, isPublished: true }).lean();
+  if (!doc) throw new NoticeError(404, 'Not found');
+  return doc;
+}
+
+// 관리자 상세는 requireMaster로 보호된 /manage/:id에서만 호출한다.
+async function getManagedNotice(id) {
   const doc = await Notice.findById(id).lean();
   if (!doc) throw new NoticeError(404, 'Not found');
-
-  if (!doc.isPublished && !master) {
-    throw new NoticeError(404, 'Not found');
-  }
   return doc;
 }
 
 // 생성 (마스터)
 async function createNotice(body, req) {
-  const { title, content, category, publishedAt, isPublished } = body || {};
-
-  if (!title || !content) {
-    throw new NoticeError(400, 'title and content are required');
-  }
-
+  const input = validateNoticeBody(body);
   const doc = await Notice.create({
-    title: String(title).trim(),
-    content: String(content),
-    category: category ? String(category).trim() : '',
-    isPublished: isPublished !== false,
-    publishedAt: publishedAt ? new Date(publishedAt) : new Date(),
+    ...input,
+    category: input.category || '',
     author: req.user?._id || req.session?.user?._id || undefined,
   });
   return doc;
@@ -84,14 +125,7 @@ async function createNotice(body, req) {
 
 // 수정 (마스터)
 async function updateNotice(id, body) {
-  const { title, content, category, publishedAt, isPublished } = body || {};
-
-  const patch = {};
-  if (title != null) patch.title = String(title).trim();
-  if (content != null) patch.content = String(content);
-  if (category != null) patch.category = String(category).trim();
-  if (isPublished != null) patch.isPublished = !!isPublished;
-  if (publishedAt != null) patch.publishedAt = new Date(publishedAt);
+  const patch = validateNoticeBody(body, { partial: true });
 
   const doc = await Notice.findByIdAndUpdate(id, patch, { new: true });
   if (!doc) throw new NoticeError(404, 'Not found');
@@ -106,9 +140,13 @@ async function deleteNotice(id) {
 
 module.exports = {
   NoticeError,
+  NOTICE_LIMITS,
+  INVALID_NOTICE_INPUT,
+  validateNoticeBody,
   listNotices,
   listManagedNotices,
-  getNotice,
+  getPublishedNotice,
+  getManagedNotice,
   createNotice,
   updateNotice,
   deleteNotice,

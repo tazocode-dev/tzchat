@@ -1,6 +1,6 @@
-import { Capacitor, type PermissionState } from '@capacitor/core'
+import { Capacitor } from '@capacitor/core'
 
-const PROMPTABLE: PermissionState[] = ['prompt', 'prompt-with-rationale']
+const PROMPTABLE = new Set(['prompt', 'prompt-with-rationale'])
 
 export class NativeContactsPermissionError extends Error {
   constructor() {
@@ -10,16 +10,19 @@ export class NativeContactsPermissionError extends Error {
 }
 
 export async function getNativeContactPhoneNumbers(): Promise<string[]> {
-  if (!['android', 'ios'].includes(Capacitor.getPlatform())) {
+  const platform = Capacitor.getPlatform()
+  if (!['android', 'ios'].includes(platform)) {
     throw new Error('웹에서는 휴대폰 연락처를 읽을 수 없습니다.')
   }
 
   const { Contacts } = await import('@capacitor-community/contacts')
   let permission = await Contacts.checkPermissions()
-  if (PROMPTABLE.includes(permission.contacts)) {
+  if (PROMPTABLE.has(permission.contacts)) {
     permission = await Contacts.requestPermissions()
   }
-  if (permission.contacts !== 'granted') throw new NativeContactsPermissionError()
+  const hasContactAccess = permission.contacts === 'granted'
+    || (platform === 'ios' && permission.contacts === 'limited')
+  if (!hasContactAccess) throw new NativeContactsPermissionError()
 
   const result = await Contacts.getContacts({
     projection: { phones: true, name: false, organization: false, postalAddresses: false },

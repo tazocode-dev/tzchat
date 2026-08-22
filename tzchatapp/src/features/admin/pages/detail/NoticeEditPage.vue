@@ -26,7 +26,7 @@
 
       <label class="field">
         <span>본문</span>
-        <textarea v-model="form.content" rows="14" placeholder="공지 내용을 입력하세요." required />
+        <textarea v-model="form.content" rows="14" maxlength="50000" placeholder="공지 내용을 입력하세요." required />
       </label>
 
       <div class="option-grid">

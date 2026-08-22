@@ -11,12 +11,14 @@ const { FriendRequest, User } = require('@/models');
 const { sendPushToUser } = require('@/services/push/sender');
 const { evaluateEmergencyState } = require('@/services/search/emergencyModeService');
 const { markNotificationChanged } = require('@/services/chat/friendRelationService');
+const { validateUserGeneratedText } = require('@/services/system/ugcContentPolicyService');
 
 class FriendRequestSendError extends Error {
-  constructor(status, message, extra) {
+  constructor(status, message, extra, code) {
     super(message);
     this.status = status;
     this.extra = extra;
+    this.code = code;
   }
 }
 
@@ -77,12 +79,21 @@ async function sendFriendRequest(fromId, toId, message, matchType = 'general') {
   if (!MATCH_CONFIG[matchType]) {
     throw new FriendRequestSendError(400, '올바르지 않은 매칭 유형입니다.');
   }
+  let normalizedMessage;
+  try {
+    normalizedMessage = validateUserGeneratedText(message, {
+      field: 'friendRequestMessage',
+      required: false,
+    });
+  } catch (error) {
+    throw new FriendRequestSendError(error.status || 400, error.message, undefined, error.code);
+  }
   const { fromUserLean } = await validateRequestTargets(fromId, toId, matchType);
 
   const createdReq = await FriendRequest.create({
     from: fromId,
     to: toId,
-    message: message || '',
+    message: normalizedMessage,
     matchType,
     status: 'pending',
   });

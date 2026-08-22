@@ -1,102 +1,131 @@
 #!/usr/bin/env node
 /**
- * 이메일 인증 로그인 전환 — username 유니크 인덱스 sparse 전환 마이그레이션
- * ------------------------------------------------------------
- * 배경:
- *  - 이메일 인증 가입자는 username 없이 생성된다(User 스키마에서 username required 해제).
- *  - 기존 users.username_1 인덱스는 "unique: true"만 있고 "sparse: true"가 없어서,
- *    username이 없는(undefined) 문서가 2건 이상 생기면 값이 null로 취급되어
- *    E11000 duplicate key(username: null) 에러로 이메일 가입 자체가 실패한다.
- *  - email_1 인덱스(unique+sparse)는 신규 모델 로드 시 mongoose가 자동 생성하지만,
- *    이미 존재하는 username_1 인덱스는 옵션이 달라도 자동으로 재생성되지 않으므로
- *    반드시 이 스크립트로 한 번 드롭 후 재생성해야 한다.
+ * username/email sparse 인덱스 호환 마이그레이션
  *
- * 실행: node scripts/migrations/2026-07-16-username-email-sparse-index.js [--dry-run]
+ * 과거 이메일 가입 도입 당시 username 없는 계정을 허용하기 위해 만든 일회성
+ * 호환 작업이다. 기본 실행은 현재 상태만 확인하고, 실제 변경은 --apply가 있을
+ * 때만 수행한다.
+ *
+ * 사용법:
+ *   node scripts/migrations/2026-07-16-username-email-sparse-index.js
+ *   node scripts/migrations/2026-07-16-username-email-sparse-index.js --apply
  *
  * 환경변수:
- *  - MONGO_URL (예: mongodb://127.0.0.1:27017/tzchat)
- *
- * 옵션:
- *  --dry-run  실제로 인덱스를 바꾸지 않고 현재 상태만 점검/출력
- *
- * 주의:
- *  - 인덱스 재생성 자체는 되돌릴 수 없는 작업은 아니지만(다시 unique만으로 재생성 가능),
- *    운영 DB에서 실행하기 전에 반드시 --dry-run으로 먼저 확인하세요.
- *  - email_1 인덱스는 User 모델이 로드되는 시점에 mongoose autoIndex로 이미
- *    생성되어 있어야 정상입니다(앱을 한 번이라도 기동했다면 보통 생성되어 있음).
- *    없다면 이 스크립트가 함께 생성합니다.
+ *   MONGO_URI (필수)
  */
 
-const path = require('path');
 require('module-alias/register');
+
 const mongoose = require('mongoose');
+const { User } = require('../../src/models');
+const {
+  redactMongoUri,
+  requireMongoUri,
+  safeErrorDetails,
+} = require('../scriptSafety');
 
-require(path.resolve(__dirname, '../../src/models'));
-const { User } = require(path.resolve(__dirname, '../../src/models'));
-
-function parseArgs() {
-  const args = process.argv.slice(2);
-  return { dryRun: args.includes('--dry-run') };
+function migrationArgumentError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
-async function main() {
-  const { dryRun } = parseArgs();
-  const mongoUrl = process.env.MONGO_URL || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/tzchat';
+function parseMigrationArgs(args = process.argv.slice(2)) {
+  const allowed = new Set(['--dry-run', '--apply']);
+  const unknown = args.find((arg) => !allowed.has(arg));
+  if (unknown) {
+    throw migrationArgumentError(
+      'INVALID_MIGRATION_ARGUMENT',
+      '지원하지 않는 실행 인자가 있습니다. --apply 또는 --dry-run만 사용할 수 있습니다.',
+    );
+  }
+  if (new Set(args).size !== args.length) {
+    throw migrationArgumentError(
+      'DUPLICATE_MIGRATION_ARGUMENT',
+      '같은 실행 인자를 중복해서 사용할 수 없습니다.',
+    );
+  }
+  if (args.includes('--apply') && args.includes('--dry-run')) {
+    throw migrationArgumentError(
+      'MIGRATION_ARGUMENT_CONFLICT',
+      '--apply와 --dry-run은 함께 사용할 수 없습니다.',
+    );
+  }
 
-  console.log('────────────────────────────────────────────────────────');
-  console.log('🛠  username/email 인덱스 sparse 전환 마이그레이션');
-  console.log(`• MONGO_URL : ${mongoUrl}`);
-  console.log(`• dry-run   : ${dryRun ? 'YES (미적용)' : 'NO (실제 적용)'}`);
-  console.log('────────────────────────────────────────────────────────');
+  const apply = args.includes('--apply');
+  return { apply, dryRun: !apply };
+}
+
+async function main(options = {}) {
+  const logger = options.logger || console;
+  const mongooseClient = options.mongooseClient || mongoose;
+  const UserModel = options.UserModel || User;
+  let connected = false;
 
   try {
-    await mongoose.connect(mongoUrl, { autoIndex: false });
+    const mode = parseMigrationArgs(options.args);
+    const mongoUri = requireMongoUri(options.env || process.env);
 
-    const before = await User.collection.indexes();
-    const usernameIdx = before.find((i) => i.name === 'username_1');
-    const emailIdx = before.find((i) => i.name === 'email_1');
+    logger.log('[username-email-index] target', redactMongoUri(mongoUri));
+    logger.log('[username-email-index] mode', mode.dryRun ? 'dry-run' : 'apply');
 
-    console.log('🔎 현재 username_1:', usernameIdx ? JSON.stringify(usernameIdx) : '(없음)');
-    console.log('🔎 현재 email_1   :', emailIdx ? JSON.stringify(emailIdx) : '(없음)');
+    await mongooseClient.connect(mongoUri, { autoIndex: false });
+    connected = true;
 
-    const usernameNeedsFix = !usernameIdx || !usernameIdx.sparse;
-    const emailNeedsCreate = !emailIdx;
+    const indexes = await UserModel.collection.indexes();
+    const usernameIndex = indexes.find((index) => index.name === 'username_1');
+    const emailIndex = indexes.find((index) => index.name === 'email_1');
+    const usernameNeedsFix = !usernameIndex || usernameIndex.sparse !== true;
+    const emailNeedsCreate = !emailIndex;
+
+    logger.log('[username-email-index] inspection', {
+      usernameNeedsFix,
+      emailNeedsCreate,
+    });
 
     if (!usernameNeedsFix && !emailNeedsCreate) {
-      console.log('✅ 이미 올바른 상태입니다. 변경할 것이 없습니다.');
-      return;
+      logger.log('[username-email-index] no changes required');
+      return { ok: true, applied: false, usernameNeedsFix, emailNeedsCreate };
     }
 
-    if (dryRun) {
-      if (usernameNeedsFix) console.log('🧪 dry-run: username_1을 드롭 후 {unique:true, sparse:true}로 재생성할 예정입니다.');
-      if (emailNeedsCreate) console.log('🧪 dry-run: email_1을 {unique:true, sparse:true}로 생성할 예정입니다.');
-      return;
+    if (mode.dryRun) {
+      logger.log('[username-email-index] dry-run completed; no index changes were made');
+      return { ok: true, applied: false, usernameNeedsFix, emailNeedsCreate };
     }
 
     if (usernameNeedsFix) {
-      if (usernameIdx) {
-        await User.collection.dropIndex('username_1');
-        console.log('🗑  기존 username_1 인덱스 드롭 완료');
-      }
-      await User.collection.createIndex({ username: 1 }, { unique: true, sparse: true, name: 'username_1' });
-      console.log('✅ username_1 인덱스를 {unique:true, sparse:true}로 재생성했습니다.');
+      if (usernameIndex) await UserModel.collection.dropIndex('username_1');
+      await UserModel.collection.createIndex(
+        { username: 1 },
+        { unique: true, sparse: true, name: 'username_1' },
+      );
     }
-
     if (emailNeedsCreate) {
-      await User.collection.createIndex({ email: 1 }, { unique: true, sparse: true, name: 'email_1' });
-      console.log('✅ email_1 인덱스를 {unique:true, sparse:true}로 생성했습니다.');
+      await UserModel.collection.createIndex(
+        { email: 1 },
+        { unique: true, sparse: true, name: 'email_1' },
+      );
     }
 
-    console.log('────────────────────────────────────────────────────────');
-    console.log('✅ 마이그레이션 완료');
-  } catch (err) {
-    console.error('❌ 마이그레이션 중 오류 발생:', err);
-    process.exitCode = 1;
+    logger.log('[username-email-index] migration applied');
+    return { ok: true, applied: true, usernameNeedsFix, emailNeedsCreate };
+  } catch (error) {
+    logger.error('[username-email-index] failed', safeErrorDetails(error));
+    return { ok: false, error: safeErrorDetails(error) };
   } finally {
-    await mongoose.disconnect().catch(() => {});
+    if (connected) {
+      await mongooseClient.disconnect().catch(() => {});
+    }
   }
 }
 
 if (require.main === module) {
-  main();
+  void main().then((result) => {
+    if (!result.ok) process.exitCode = 1;
+  });
 }
+
+module.exports = {
+  main,
+  parseMigrationArgs,
+};

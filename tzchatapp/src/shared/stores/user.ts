@@ -243,21 +243,6 @@ export const useUserStore = defineStore('user', {
       return null
     },
 
-    /** 임시 결제 성공 직후 등급만 빠르게 반영(낙관적 업데이트) */
-    applyLevel(level: UserLevel) {
-      if (!this.user) return
-      this.user = { ...this.user, user_level: level }
-      // 캐시도 동기화
-      _meCache.user = this.user
-      _meCache.checkedAt = Date.now()
-    },
-
-    /** 결제 후 보수적 재동기화(백엔드 반영 상태 확인) */
-    async refreshAfterPurchase() {
-      // 결제 직후는 최신이 중요하니 force
-      return await this.fetchMe({ force: true })
-    },
-
     /** 소켓에서 내 정보 변경을 받아 인증 사용자 상태를 갱신한다. */
     bindSocket(io: any) {
       if (this._socketBound || !io) return

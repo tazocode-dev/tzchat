@@ -9,12 +9,11 @@
 // -------------------------------------------------------------
 
 const express = require('express');
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/public/imageRead.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion);
+router.use(authMiddleware);
 
 router.get('/profile/images', controller.listMine);
 router.get('/users/:id/profile/images', controller.listOfUser);

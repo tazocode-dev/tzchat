@@ -6,16 +6,17 @@
 const express = require('express');
 const router = express.Router();
 
-const requireLogin = require('@/middlewares/authMiddleware'); // 기존 프로젝트 기준
+const authMiddleware = require('@/middlewares/authMiddleware');
+const allowPendingDeletion = authMiddleware.allowPendingDeletion;
 const controller = require('@/controllers/system/accountDeletion.controller');
 
 // GET /api/account/status — 로그인 직후/앱 진입 시 계정 상태 확인 용도
-router.get('/status', requireLogin, controller.status);
+router.get('/status', allowPendingDeletion, controller.status);
 
 // POST /api/account/delete-request — 탈퇴 신청
-router.post('/delete-request', requireLogin, controller.deleteRequest);
+router.post('/delete-request', authMiddleware, controller.deleteRequest);
 
 // POST /api/account/cancel-delete — 유예기간 내 탈퇴 신청 취소
-router.post('/cancel-delete', requireLogin, controller.cancelDelete);
+router.post('/cancel-delete', allowPendingDeletion, controller.cancelDelete);
 
 module.exports = router;

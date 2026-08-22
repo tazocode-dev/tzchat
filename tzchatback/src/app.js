@@ -17,6 +17,8 @@ const { validateEnv } = require('@/config/validateEnv');
 const { parseCorsOrigins, createOriginVerifier } = require('@/config/corsOrigins');
 const { JWT_SECRET, SESSION_SECRET } = require('@/config/secrets');
 const { fail: respondFail } = require('@/utils/response');
+const { extractHttpToken } = require('@/utils/authToken');
+const { logAccess, normalizeAccessPath, reportError } = require('@/utils/runtimeLogger');
 
 validateEnv();
 
@@ -57,7 +59,7 @@ if (fs.existsSync(publicDir)) {
 /**
  * ✅ /uploads 정적 서빙(루트)
  */
-const uploadsRoot = path.join(ROOT_DIR, 'uploads');
+const uploadsRoot = path.resolve(process.env.UPLOAD_ROOT || path.join(ROOT_DIR, 'uploads'));
 if (!fs.existsSync(uploadsRoot)) {
   fs.mkdirSync(uploadsRoot, { recursive: true });
   console.warn('ℹ️  uploads 폴더가 없어서 생성했습니다:', uploadsRoot);
@@ -69,13 +71,18 @@ console.log('🖼️  /uploads 정적 서빙 활성화:', uploadsRoot);
 app.use('/uploads/profile', express.static(path.join(uploadsRoot, 'profile')));
 app.use('/uploads/chat', express.static(path.join(uploadsRoot, 'chat')));
 
-// ✅ 공통 요청 로그: method, path, status, response time (지침 §11)
+// 공통 요청 로그: query/body/token/사용자 식별자를 제외한 라우트 패턴만 남긴다.
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   const startedAt = process.hrtime.bigint();
   res.on('finish', () => {
     const ms = Number(process.hrtime.bigint() - startedAt) / 1e6;
-    console.log(`📥 ${req.method} ${req.originalUrl} → ${res.statusCode} (${ms.toFixed(1)}ms)`);
+    logAccess({
+      method: req.method,
+      path: normalizeAccessPath(req),
+      status: res.statusCode,
+      durationMs: ms,
+    });
   });
   next();
 });
@@ -164,23 +171,11 @@ console.log('🔐 세션 설정 완료:', cookieConfig);
 // ---------------------------------------
 // ✅ JWT 파서/검증 미들웨어
 // ---------------------------------------
-function extractToken(req) {
-  const auth = req.headers['authorization'] || '';
-  if (auth.startsWith('Bearer ')) return auth.slice(7).trim();
-  const xToken = req.headers['x-auth-token'];
-  if (xToken) return String(xToken).trim();
-  if (req.query && req.query.token) return String(req.query.token).trim();
-  return null;
-}
 app.use((req, res, next) => {
-  const token = extractToken(req);
-  if (!token) {
-    console.log('[AUTH][JWT][MISS]', { path: req.path });
-    return next();
-  }
+  const token = extractHttpToken(req);
+  if (!token) return next();
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    console.log('[AUTH][JWT][OK]', { sub: payload.sub || payload._id || '(none)', path: req.path });
     req.user = {
       _id: payload._id || payload.sub || null,
       username: payload.username || null,
@@ -196,12 +191,15 @@ app.use((req, res, next) => {
 
 // 디버그 라우트는 개발 환경에서만 노출한다.
 if (!isProd) app.get('/debug/echo', (req, res) => {
-  console.log('🔎 /debug/echo cookies =', req.headers.cookie || '(none)');
-  res.json({ ok: true, gotCookieHeader: !!req.headers.cookie, cookieHeader: req.headers.cookie || null });
+  res.json({ ok: true, gotCookieHeader: !!req.headers.cookie });
 });
 if (!isProd) app.get('/debug/session', (req, res) => {
-  console.log('🔎 /debug/session sessionID =', req.sessionID, ' user =', req.session?.user || null, ' jwtUser =', req.user || null);
-  res.json({ ok: true, sessionID: req.sessionID, sessionUser: req.session?.user || null, jwtUser: req.user || null });
+  res.json({
+    ok: true,
+    hasSession: Boolean(req.sessionID),
+    sessionUserId: req.session?.user?._id || null,
+    jwtUserId: req.user?._id || null,
+  });
 });
 if (!isProd) app.get('/debug/set-cookie', (req, res) => {
   const value = Date.now().toString(36);
@@ -211,18 +209,12 @@ if (!isProd) app.get('/debug/set-cookie', (req, res) => {
     secure: cookieConfig.secure,
     path: '/',
   });
-  console.log('🔎 /debug/set-cookie -> Set-Cookie: tzchat_test=', value);
-  res.json({ ok: true, set: true, value });
+  res.json({ ok: true, set: true });
 });
 
 // ✅ 헬스 체크
 app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    uptime: process.uptime(),
-    pid: process.pid,
-    ts: new Date().toISOString(),
-  });
+  res.json({ ok: true });
 });
 
 // =======================================
@@ -240,7 +232,11 @@ app.use((req, res, next) => {
  *  - JSON 500 응답에서 사용자 메시지와 내부 진단 로그를 분리한다 (지침 §4)
  * ------------------------------------- */
 app.use((err, req, res, next) => {
-  console.error('[UNHANDLED]', req.method, req.originalUrl, '|', err && (err.stack || err.message || err));
+  reportError('UNHANDLED_REQUEST', err, {
+    method: req.method,
+    path: normalizeAccessPath(req),
+    status: Number(err?.status || 500),
+  });
   if (err && err.status === 403 && err.message === 'Not allowed by CORS') {
     return respondFail(res, 403, 'CORS_ORIGIN_DENIED', '허용되지 않은 요청 Origin입니다.');
   }

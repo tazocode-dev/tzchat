@@ -9,6 +9,7 @@ const { isValidObjectId } = mongoose;
 const { Message, FriendRequest, User } = require('@/models');
 const { createOrGetChatRoom } = require('@/services/chat/chatRoomService');
 const { markNotificationChanged } = require('@/services/chat/friendRelationService');
+const { areUsersBlocked } = require('@/services/chat/blockPolicyService');
 
 class FriendRequestManageError extends Error {
   constructor(status, message) {
@@ -36,10 +37,18 @@ async function populateRequest(doc) {
 /* =========================
  *  🤝 수락 (채팅방 ID 반환)
  * ========================= */
-async function acceptRequest(myId, id) {
+async function acceptRequest(myId, id, dependencies = {}) {
   if (!isValidObjectId(id)) throw new FriendRequestManageError(400, '유효하지 않은 요청 ID입니다.');
 
-  const request = await FriendRequest.findOneAndUpdate(
+  const FriendRequestModel = dependencies.FriendRequestModel || FriendRequest;
+  const checkBlocked = dependencies.areUsersBlocked || areUsersBlocked;
+  const pendingRequest = await FriendRequestModel.findOne({ _id: id, to: myId, status: 'pending' });
+  if (!pendingRequest) throw new FriendRequestManageError(403, '권한 없음 또는 신청 없음/이미 처리됨');
+  if (await checkBlocked(myId, pendingRequest.from, dependencies)) {
+    throw new FriendRequestManageError(403, '차단 관계에서는 신청을 수락할 수 없습니다.');
+  }
+
+  const request = await FriendRequestModel.findOneAndUpdate(
     { _id: id, to: myId, status: 'pending' },
     { $set: { status: 'accepted' } },
     { new: true }

@@ -11,12 +11,11 @@
 // -------------------------------------------------------------
 const express = require('express');
 
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/chat/chatRoom.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion);
+router.use(authMiddleware);
 
 router.get('/chatrooms', controller.listRooms);
 router.get('/chatrooms/unread-total', controller.unreadTotal);

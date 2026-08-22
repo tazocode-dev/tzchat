@@ -6,11 +6,22 @@
 const { User } = require('@/models');
 const retention = require('@/config/retention');
 
+const ACCOUNT_DELETION_CODES = Object.freeze({
+  AUTH_REQUIRED: 'AUTH_REQUIRED',
+  USER_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
+  ALREADY_REQUESTED: 'ACCOUNT_DELETION_ALREADY_REQUESTED',
+  PENDING: 'ACCOUNT_DELETION_PENDING',
+  CANCELED: 'ACCOUNT_DELETION_CANCELED',
+  CANCEL_NOT_ALLOWED: 'ACCOUNT_DELETION_CANCEL_NOT_ALLOWED',
+  INTERNAL_ERROR: 'ACCOUNT_DELETION_INTERNAL_ERROR',
+});
+
 class AccountDeletionError extends Error {
-  constructor(status, payload) {
-    super(payload?.message || payload?.error);
+  constructor(status, code, message, details = {}) {
+    super(message);
     this.status = status;
-    this.payload = payload;
+    this.code = code;
+    this.payload = { code, message, error: message, ...details };
   }
 }
 
@@ -31,12 +42,25 @@ function resolveUserId(req) {
   return req._uid || req.user?._id || req.auth?.userId || req.session?.user?._id;
 }
 
-async function getStatus(req) {
+async function getStatus(req, dependencies = {}) {
   const userId = resolveUserId(req);
-  if (!userId) throw new AccountDeletionError(401, { error: 'Unauthorized' });
+  if (!userId) {
+    throw new AccountDeletionError(
+      401,
+      ACCOUNT_DELETION_CODES.AUTH_REQUIRED,
+      '로그인이 필요합니다.',
+    );
+  }
 
-  const user = await User.findById(userId).lean();
-  if (!user) throw new AccountDeletionError(404, { error: 'User not found' });
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findById(userId).lean();
+  if (!user) {
+    throw new AccountDeletionError(
+      404,
+      ACCOUNT_DELETION_CODES.USER_NOT_FOUND,
+      '사용자를 찾을 수 없습니다.',
+    );
+  }
 
   const isPending = user.status === 'pendingDeletion';
   return {
@@ -50,17 +74,31 @@ async function getStatus(req) {
   };
 }
 
-async function requestDeletion(req) {
+async function requestDeletion(req, dependencies = {}) {
   const userId = resolveUserId(req);
-  if (!userId) throw new AccountDeletionError(401, { message: 'Unauthorized' });
+  if (!userId) {
+    throw new AccountDeletionError(
+      401,
+      ACCOUNT_DELETION_CODES.AUTH_REQUIRED,
+      '로그인이 필요합니다.',
+    );
+  }
 
-  const user = await User.findById(userId);
-  if (!user) throw new AccountDeletionError(404, { message: 'User not found' });
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new AccountDeletionError(
+      404,
+      ACCOUNT_DELETION_CODES.USER_NOT_FOUND,
+      '사용자를 찾을 수 없습니다.',
+    );
+  }
 
   if (user.status === 'pendingDeletion' || user.status === 'deleted') {
     return {
       alreadyRequested: true,
-      message: 'Already requested',
+      code: ACCOUNT_DELETION_CODES.ALREADY_REQUESTED,
+      message: '이미 탈퇴가 신청된 계정입니다.',
       status: user.status,
       deletionDueAt: user.deletionDueAt || null,
     };
@@ -72,18 +110,32 @@ async function requestDeletion(req) {
   await user.save();
   return {
     alreadyRequested: false,
-    message: 'Deletion pending',
+    code: ACCOUNT_DELETION_CODES.PENDING,
+    message: '탈퇴 신청이 완료되었습니다.',
     status: user.status,
     deletionDueAt: user.deletionDueAt || null,
   };
 }
 
-async function cancelDeletion(req) {
+async function cancelDeletion(req, dependencies = {}) {
   const userId = resolveUserId(req);
-  if (!userId) throw new AccountDeletionError(401, { message: 'Unauthorized' });
+  if (!userId) {
+    throw new AccountDeletionError(
+      401,
+      ACCOUNT_DELETION_CODES.AUTH_REQUIRED,
+      '로그인이 필요합니다.',
+    );
+  }
 
-  const user = await User.findById(userId);
-  if (!user) throw new AccountDeletionError(404, { message: 'User not found' });
+  const UserModel = dependencies.UserModel || User;
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new AccountDeletionError(
+      404,
+      ACCOUNT_DELETION_CODES.USER_NOT_FOUND,
+      '사용자를 찾을 수 없습니다.',
+    );
+  }
 
   const now = new Date();
   const isInGrace =
@@ -92,18 +144,32 @@ async function cancelDeletion(req) {
     user.deletionDueAt > now;
 
   if (!isInGrace) {
-    throw new AccountDeletionError(400, {
-      message: 'Cancellation not allowed (not in pendingDeletion or grace period passed).',
-      status: user.status,
-      deletionDueAt: user.deletionDueAt || null,
-    });
+    throw new AccountDeletionError(
+      400,
+      ACCOUNT_DELETION_CODES.CANCEL_NOT_ALLOWED,
+      '탈퇴 신청을 취소할 수 없는 상태이거나 취소 가능 기간이 지났습니다.',
+      {
+        status: user.status,
+        deletionDueAt: user.deletionDueAt || null,
+      },
+    );
   }
 
   if (typeof user.cancelDeletion === 'function') user.cancelDeletion();
   else applyCancelDeletionFields(user);
 
   await user.save();
-  return { message: 'Deletion canceled', status: user.status };
+  return {
+    code: ACCOUNT_DELETION_CODES.CANCELED,
+    message: '탈퇴 신청이 취소되었습니다.',
+    status: user.status,
+  };
 }
 
-module.exports = { AccountDeletionError, getStatus, requestDeletion, cancelDeletion };
+module.exports = {
+  ACCOUNT_DELETION_CODES,
+  AccountDeletionError,
+  cancelDeletion,
+  getStatus,
+  requestDeletion,
+};

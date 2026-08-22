@@ -52,6 +52,9 @@ async function patchNickname(req, res) {
     await updateNickname(userId, (req.body || {}).nickname);
     return res.json({ success: true });
   } catch (err) {
+    if (err?.code === 'UGC_CONTENT_REJECTED') {
+      return res.status(400).json({ success: false, code: err.code, message: err.message });
+    }
     if (err instanceof ProfileError) {
       return res.status(err.status).json({ success: false, message: err.message });
     }
@@ -85,6 +88,9 @@ async function patchSelfintro(req, res) {
     const selfintro = await updateSelfintro(userId, (req.body || {}).selfintro);
     return res.json({ success: true, selfintro });
   } catch (error) {
+    if (error?.code === 'UGC_CONTENT_REJECTED') {
+      return res.status(400).json({ success: false, code: error.code, message: error.message });
+    }
     if (error instanceof ProfileError) {
       return res.status(error.status).json({ success: false, message: error.message });
     }

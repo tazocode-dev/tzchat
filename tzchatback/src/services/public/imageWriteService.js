@@ -10,6 +10,17 @@ const sharp = require('sharp');
 
 const { User } = require('@/models');
 const { toAbsoluteMediaUrl } = require('@/utils/mediaUrl');
+const {
+  ImageUploadError,
+  SHARP_INPUT_OPTIONS,
+  ensureDirectorySync,
+  getUploadRoot,
+  inspectImageFile,
+  removeFileQuietly,
+  removeUploadedTempFiles,
+  resolveWithinRoot,
+  validateProfileUserId,
+} = require('@/services/media/imageUploadSecurityService');
 
 class ImageWriteError extends Error {
   constructor(status, message) {
@@ -22,23 +33,17 @@ const MAX_PROFILE_IMAGES = 2;
 const PROFILE_IMAGE_LIMIT_MESSAGE = '현재 프로필 사진은 최대 2장까지 등록할 수 있습니다.';
 
 // ===== 경로/ID 유틸 =====
-const UPLOAD_ROOT =
-  process.env.UPLOAD_ROOT
-  || path.resolve(__dirname, '../../../uploads'); // src/services/public/ → ../../../ → 프로젝트 루트
+const UPLOAD_ROOT = getUploadRoot();
 const PROFILE_ROOT = path.join(UPLOAD_ROOT, 'profile');
 
 function ensureDirSync(dir) {
-  try {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  } catch (e) {
-    console.error('[profileImage] 디렉터리 생성 실패:', dir, e);
-  }
+  ensureDirectorySync(dir);
 }
 ensureDirSync(UPLOAD_ROOT);
 ensureDirSync(PROFILE_ROOT);
 
 function getUserProfileDir(userId) {
-  const dir = path.join(PROFILE_ROOT, String(userId));
+  const dir = resolveWithinRoot(PROFILE_ROOT, validateProfileUserId(userId));
   ensureDirSync(dir);
   return dir;
 }
@@ -50,21 +55,27 @@ function genId() {
 
 /** 내부 절대경로 → 퍼블릭 상대경로(/uploads/...) */
 function toPublicUrl(absPath) {
-  const normalized = (absPath || '').replace(/\\/g, '/');
-  const base = UPLOAD_ROOT.replace(/\\/g, '/');
-  const rel = normalized.startsWith(base) ? normalized.slice(base.length) : null;
-  if (!rel) return null;
-  return `/uploads${rel}`;
+  if (!absPath) return null;
+  let normalized;
+  try {
+    normalized = resolveWithinRoot(UPLOAD_ROOT, path.relative(UPLOAD_ROOT, absPath));
+  } catch {
+    return null;
+  }
+  const relative = path.relative(UPLOAD_ROOT, normalized).split(path.sep).join('/');
+  return relative ? `/uploads/${relative}` : null;
 }
 
 /** 퍼블릭 URL(/uploads/...) → 서버 절대경로 */
 function publicUrlToAbs(publicUrl) {
-  if (!publicUrl) return null;
-  const p = publicUrl.replace(/\\/g, '/');
-  const i = p.indexOf('/uploads/');
-  if (i === -1) return null;
-  const rel = p.slice(i + '/uploads/'.length).replace(/\.\./g, '');
-  return path.join(UPLOAD_ROOT, rel);
+  if (typeof publicUrl !== 'string') return null;
+  const match = publicUrl.replace(/\\/g, '/').match(/^\/uploads\/profile\/(.+)$/);
+  if (!match || match[1].includes('%')) return null;
+  try {
+    return resolveWithinRoot(PROFILE_ROOT, ...match[1].split('/'));
+  } catch {
+    return null;
+  }
 }
 
 const toAbsoluteUploadUrl = toAbsoluteMediaUrl;
@@ -77,7 +88,7 @@ const SIZES = [
 ];
 
 async function createVariantsAndSave(srcPath, outBasePathNoExt, aspect) {
-  const input = sharp(srcPath, { failOnError: false }).rotate();
+  const input = sharp(srcPath, SHARP_INPUT_OPTIONS).rotate();
   const meta = await input.metadata();
   const w = meta.width || 0;
   const h = meta.height || 0;
@@ -93,7 +104,7 @@ async function createVariantsAndSave(srcPath, outBasePathNoExt, aspect) {
   const results = {};
   for (const s of SIZES) {
     const outPath = `${outBasePathNoExt}_${s.name}.jpg`;
-    await sharp(srcPath)
+    await sharp(srcPath, SHARP_INPUT_OPTIONS)
       .rotate()
       .extract({ left, top, width: cropW, height: cropH })
       .resize({ width: s.w, withoutEnlargement: true })
@@ -105,15 +116,6 @@ async function createVariantsAndSave(srcPath, outBasePathNoExt, aspect) {
   return results; // { thumb, medium, full }
 }
 
-function removeFileQuietly(filePath) {
-  if (!filePath) return;
-  try { fs.unlinkSync(filePath); } catch {}
-}
-
-function removeUploadedTempFiles(files) {
-  for (const file of files || []) removeFileQuietly(file?.path);
-}
-
 function variantPaths(outBasePathNoExt) {
   return SIZES.map(size => `${outBasePathNoExt}_${size.name}.jpg`);
 }
@@ -121,46 +123,37 @@ function variantPaths(outBasePathNoExt) {
 // [1] 이미지 업로드 (다중)
 async function uploadImages({ myId, kind: kindInput, files, req }, dependencies = {}) {
   const fileList = Array.isArray(files) ? files : [];
-  if (!myId) {
-    removeUploadedTempFiles(fileList);
-    throw new ImageWriteError(401, '로그인이 필요합니다.');
-  }
-
   const UserModel = dependencies.UserModel || User;
   const makeVariants = dependencies.createVariantsAndSave || createVariantsAndSave;
-  const me = await UserModel.findById(myId, { profileImages: 1, profileMain: 1 }).lean();
-  if (!me) {
-    removeUploadedTempFiles(fileList);
-    throw new ImageWriteError(404, '사용자를 찾을 수 없습니다.');
-  }
-
-  if (!fileList.length) throw new ImageWriteError(400, '업로드된 파일이 없습니다.');
-
-  const existingCount = Array.isArray(me.profileImages) ? me.profileImages.length : 0;
-  if (existingCount + fileList.length > MAX_PROFILE_IMAGES) {
-    removeUploadedTempFiles(fileList);
-    throw new ImageWriteError(400, PROFILE_IMAGE_LIMIT_MESSAGE);
-  }
-
-  const kind = (kindInput === 'avatar' || kindInput === 'gallery') ? kindInput : 'gallery';
-  const aspect = kind === 'avatar' ? 1.0 : 0.8; // 1:1 or 4:5
-  const userDir = getUserProfileDir(myId);
-
-  const toInsert = [];
-  const created = [];
+  const inspect = dependencies.inspectImageFile || inspectImageFile;
   const generatedPaths = [];
 
   try {
+    if (!myId) throw new ImageWriteError(401, '로그인이 필요합니다.');
+
+    const me = await UserModel.findById(myId, { profileImages: 1, profileMain: 1 }).lean();
+    if (!me) throw new ImageWriteError(404, '사용자를 찾을 수 없습니다.');
+    if (!fileList.length) throw new ImageWriteError(400, '업로드된 파일이 없습니다.');
+
+    const existingCount = Array.isArray(me.profileImages) ? me.profileImages.length : 0;
+    if (existingCount + fileList.length > MAX_PROFILE_IMAGES) {
+      throw new ImageWriteError(400, PROFILE_IMAGE_LIMIT_MESSAGE);
+    }
+
+    const kind = (kindInput === 'avatar' || kindInput === 'gallery') ? kindInput : 'gallery';
+    const aspect = kind === 'avatar' ? 1.0 : 0.8; // 1:1 or 4:5
+    const userDir = getUserProfileDir(myId);
+    const toInsert = [];
+    const created = [];
+
     for (const file of fileList) {
+      await inspect(file);
       const uid = genId();
       const baseNoExt = path.join(userDir, uid);
       generatedPaths.push(...variantPaths(baseNoExt));
 
       // 3종 생성
       const variants = await makeVariants(file.path, baseNoExt, aspect);
-
-      // 원본 임시파일 삭제
-      removeFileQuietly(file.path);
 
       const urls = {
         thumb:  toPublicUrl(variants.thumb),
@@ -217,9 +210,13 @@ async function uploadImages({ myId, kind: kindInput, files, req }, dependencies 
       ...(shouldSetMain ? { profileMain: toInsert[0].id } : {})
     };
   } catch (error) {
-    removeUploadedTempFiles(fileList);
     for (const generatedPath of generatedPaths) removeFileQuietly(generatedPath);
+    if (error instanceof ImageUploadError) {
+      throw new ImageWriteError(error.status, error.message);
+    }
     throw error;
+  } finally {
+    removeUploadedTempFiles(fileList);
   }
 }
 
@@ -272,6 +269,7 @@ module.exports = {
   ensureDirSync,
   getUserProfileDir,
   genId,
+  createVariantsAndSave,
   uploadImages,
   deleteImage,
 };

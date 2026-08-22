@@ -20,23 +20,10 @@ class AccountError extends Error {
 
 function resolveRole(u) {
   if (!u) return '';
-  if (u.role) return String(u.role);
-  if (Array.isArray(u.roles)) {
-    if (u.roles.includes('master')) return 'master';
-    if (u.roles.includes('admin')) return 'admin';
-    if (u.roles.length > 0) return String(u.roles[0]);
-  }
-  if (u.username === 'master') return 'master';
-  return 'user';
+  return u.role === 'master' ? 'master' : 'user';
 }
 function resolveIsAdmin(u) {
-  if (!u) return false;
-  if (u.isAdmin === true) return true;
-  const role = resolveRole(u);
-  if (role === 'master' || role === 'admin') return true;
-  if (Array.isArray(u.roles) && (u.roles.includes('master') || u.roles.includes('admin'))) return true;
-  if (u.username === 'master') return true;
-  return false;
+  return resolveRole(u) === 'master';
 }
 function formatE164KR(p = '') {
   const s = String(p || '');
@@ -63,7 +50,7 @@ function maskPhone(p = '') {
 async function getMyProfile(userId) {
   const userDoc = await User.findById(userId)
     .select([
-      'username', 'role', 'roles', 'isAdmin', 'nickname', 'birthyear', 'birthDate', 'gender',
+      'username', 'role', 'nickname', 'birthyear', 'birthDate', 'gender',
       'profileOnboardingCompletedAt',
       'region1', 'region2', 'preference', 'selfintro',
       'profileImages', 'profileMain', 'profileImage', 'last_login',
@@ -108,7 +95,7 @@ async function getMyProfile(userId) {
   }
 
   const role = resolveRole(raw);
-  const roles = Array.isArray(raw.roles) ? raw.roles : (role ? [role] : []);
+  const roles = role ? [role] : [];
   const isAdmin = resolveIsAdmin(raw);
   const searchRegions = Array.isArray(raw.search_regions) ? raw.search_regions : [];
 

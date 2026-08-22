@@ -85,6 +85,9 @@ async function createRoom(req, res) {
     log(created ? `✅ created room=${chatRoom._id}` : `found room=${chatRoom._id}`);
     return res.json(chatRoom);
   } catch (err) {
+    if (err instanceof ChatRoomError) {
+      return res.status(err.status).json({ message: err.message });
+    }
     console.error('[chatRoomsRouter][ERR]/create', err?.message);
     return res.status(500).json({ message: '서버 오류' });
   }

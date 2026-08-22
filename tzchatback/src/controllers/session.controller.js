@@ -19,6 +19,26 @@ const {
 const {
   cleanupNativePushForLogout,
 } = require('@/services/system/pushService');
+const {
+  LoginAttemptLimiter,
+  normalizeLoginIp,
+} = require('@/services/auth/loginAttemptLimiter');
+
+const loginAttemptLimiter = new LoginAttemptLimiter();
+
+function loginClientIp(req) {
+  return normalizeLoginIp(req.ip || req.socket?.remoteAddress || '');
+}
+
+function respondLoginRateLimit(res, retryAfterSeconds) {
+  res.setHeader('Retry-After', String(retryAfterSeconds));
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(429).json({
+    ok: false,
+    code: 'LOGIN_RATE_LIMITED',
+    message: '로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+  });
+}
 
 function setJwtCookie(res, token) {
   res.cookie(COOKIE_NAME, token, {
@@ -41,8 +61,12 @@ function setRefreshCookie(res, token) {
 
 async function login(req, res) {
   const { username, password } = req.body || {};
+  const clientIp = loginClientIp(req);
+  const currentLimit = loginAttemptLimiter.check(clientIp, username);
+  if (currentLimit.limited) {
+    return respondLoginRateLimit(res, currentLimit.retryAfterSeconds);
+  }
   console.log('[API][REQ] /login', {
-    username,
     ua: req.get('user-agent'),
     origin: req.get('origin') || '(none)',
     hasCookie: !!req.headers.cookie,
@@ -50,6 +74,7 @@ async function login(req, res) {
 
   try {
     const { user, token, refreshToken, role, roles, isAdmin, expiresIn } = await authenticateUser(username, password);
+    loginAttemptLimiter.recordSuccess(clientIp, username);
 
     setJwtCookie(res, token);
     setRefreshCookie(res, refreshToken);
@@ -66,7 +91,7 @@ async function login(req, res) {
       console.log('[AUTH][SESSION] regenerated + saved', { sid: req.sessionID, userId: String(user._id) });
     }
 
-    console.log('[API][RES] /login 200', { username: user.username, userId: String(user._id), role, isAdmin });
+    console.log('[API][RES] /login 200', { userId: String(user._id), role, isAdmin });
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).json({
       ok: true,
@@ -82,8 +107,14 @@ async function login(req, res) {
     });
   } catch (err) {
     if (err instanceof SessionError) {
+      if (err.code === 'INVALID_CREDENTIALS') {
+        const failedLimit = loginAttemptLimiter.recordFailure(clientIp, username);
+        if (failedLimit.limited) {
+          return respondLoginRateLimit(res, failedLimit.retryAfterSeconds);
+        }
+      }
       console.log('[AUTH][ERR]', { step: 'login', code: err.code, message: err.message });
-      return res.status(err.status).json({ ok: false, message: err.message });
+      return res.status(err.status).json({ ok: false, code: err.code, message: err.message });
     }
     console.log('[AUTH][ERR]', { step: 'login', message: err?.message });
     return res.status(500).json({ ok: false, message: '서버 오류' });
@@ -160,4 +191,6 @@ module.exports = {
   // ✅ emailAuth.controller.js가 로그인 성공 시 동일한 쿠키 설정을 재사용하기 위해 export.
   setJwtCookie,
   setRefreshCookie,
+  loginClientIp,
+  respondLoginRateLimit,
 };

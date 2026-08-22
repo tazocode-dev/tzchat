@@ -32,6 +32,11 @@ import {
   personCircleOutline,
   settingsOutline,
 } from 'ionicons/icons'
+import { configureClientConsole } from '@/shared/utils/clientLogger'
+
+// 운영 브라우저에서 일반 로그를 차단하고 경고·오류의 민감 필드를 제거한다.
+configureClientConsole()
+
 addIcons({
   warningOutline,
   locateOutline,

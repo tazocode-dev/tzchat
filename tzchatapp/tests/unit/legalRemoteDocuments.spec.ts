@@ -7,7 +7,7 @@ import {
 } from '@/features/legal/constants/legals'
 import legalDocsSource from '@/features/legal/LegalDocs.vue?raw'
 import legalContainerSource from '@/features/legal/LegalContainer.vue?raw'
-import deletionSettingSource from '@/features/settings/components/setlist/0020_s_delete.vue?raw'
+import deletionSettingSource from '@/features/settings/pages/AccountDeletionPage.vue?raw'
 import routerSource from '@/router/index.ts?raw'
 
 describe('GitHub Pages 법적 문서 연결', () => {
@@ -65,9 +65,7 @@ describe('GitHub Pages 법적 문서 연결', () => {
     expect(routerSource).toContain("{ path: 'setting/0005', redirect: '/home/legals/v2/privacy' }")
     expect(routerSource).toContain("{ path: 'setting/0006', redirect: '/home/legals/v2/terms' }")
     expect(routerSource).toContain("{ path: 'setting/0007', redirect: '/home/legals/v2/youth-policy' }")
-    expect(routerSource).not.toContain("@/features/settings/components/setlist/0005_s.vue")
-    expect(routerSource).not.toContain("@/features/settings/components/setlist/0006_s.vue")
-    expect(routerSource).not.toContain("@/features/settings/components/setlist/0007_s.vue")
+    expect(routerSource).not.toContain('@/features/settings/components/setlist/')
   })
 
   test('계정 삭제 설정에서 canonical 삭제 안내로 진입한다', () => {

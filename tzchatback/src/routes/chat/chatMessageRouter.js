@@ -8,15 +8,19 @@
 // -------------------------------------------------------------
 const express = require('express');
 
-const requireLogin = require('@/middlewares/authMiddleware');
-const blockIfPendingDeletion = require('@/middlewares/blockIfPendingDeletion');
+const authMiddleware = require('@/middlewares/authMiddleware');
 const controller = require('@/controllers/chat/chatMessage.controller');
 
 const router = express.Router();
-router.use(requireLogin, blockIfPendingDeletion);
+router.use(authMiddleware);
 
 router.post('/chatrooms/:id/message', controller.postMessage);
 router.put('/chatrooms/:id/read', controller.putRead);
-router.post('/chatrooms/:id/upload-image', controller.uploadMiddleware.single('image'), controller.postUploadImage);
+router.post(
+  '/chatrooms/:id/upload-image',
+  controller.preflightUpload,
+  controller.uploadSingleImage,
+  controller.postUploadImage
+);
 
 module.exports = router;
